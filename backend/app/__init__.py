@@ -1,0 +1,1 @@
+"""School task backend package."""
