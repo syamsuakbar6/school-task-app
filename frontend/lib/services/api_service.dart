@@ -77,11 +77,29 @@ class ApiService {
     return AppUser.fromJson(_decodeObject(response));
   }
 
-  Future<List<Task>> fetchTasks() async {
+  // ── Classes ──────────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> fetchClasses() async {
     final response = await _client.get(
-      Uri.parse('$baseUrl/tasks'),
+      Uri.parse('$baseUrl/classes'),
       headers: _headers,
     );
+    debugPrint('CLASSES STATUS: ${response.statusCode}');
+    debugPrint('CLASSES BODY: ${response.body}');
+    return _decodeList(response);
+  }
+
+  // ── Tasks ─────────────────────────────────────────────────────────────────
+
+  /// [classId] opsional — kalau diisi, hanya tampilkan task dari kelas itu.
+  Future<List<Task>> fetchTasks({int? classId}) async {
+    final uri = Uri.parse('$baseUrl/tasks').replace(
+      queryParameters: {
+        if (classId != null) 'class_id': classId.toString(),
+      },
+    );
+    final response = await _client.get(uri, headers: _headers);
+    debugPrint('TASKS STATUS: ${response.statusCode}');
     return _decodeList(response).map((json) => Task.fromJson(json)).toList();
   }
 
@@ -112,6 +130,8 @@ class ApiService {
     return Task.fromJson(_decodeObject(response));
   }
 
+  // ── Submissions ───────────────────────────────────────────────────────────
+
   Future<List<Submission>> fetchSubmissions({int? taskId}) async {
     final uri = Uri.parse('$baseUrl/submissions').replace(
       queryParameters: {
@@ -141,13 +161,9 @@ class ApiService {
 
     final uri = _absoluteUri(downloadUrl);
     debugPrint('DOWNLOAD FILE URL: $uri');
-    debugPrint('DOWNLOAD FILE HEADERS: $_headers');
 
     final response = await _client.get(uri, headers: _headers);
     debugPrint('DOWNLOAD FILE STATUS: ${response.statusCode}');
-    debugPrint(
-        'DOWNLOAD FILE CONTENT-TYPE: ${response.headers['content-type']}');
-    debugPrint('DOWNLOAD FILE BYTES: ${response.bodyBytes.length}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _decode(response);
@@ -185,17 +201,6 @@ class ApiService {
     request.headers.addAll(_headers);
     request.fields['task_id'] = taskId.toString();
 
-    debugPrint('SUBMISSION UPLOAD URL: $uri');
-    debugPrint('SUBMISSION UPLOAD HEADERS: ${request.headers}');
-    debugPrint('SUBMISSION UPLOAD FIELDS: ${request.fields}');
-    debugPrint(
-      'SUBMISSION UPLOAD FILE: '
-      'name=${file.name}, '
-      'size=${file.size}, '
-      'hasBytes=${file.bytes != null}, '
-      'path=${file.path}',
-    );
-
     if (file.bytes != null) {
       request.files.add(http.MultipartFile.fromBytes(
         'file',
@@ -230,6 +235,8 @@ class ApiService {
     );
     return Submission.fromJson(_decodeObject(response));
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   Uri _absoluteUri(String pathOrUrl) {
     final parsed = Uri.parse(pathOrUrl);

@@ -28,25 +28,69 @@ class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Task>> _tasksFuture;
   Future<List<Submission>>? _studentSubmissionsFuture;
 
+  // State untuk multi-class (teacher only)
+  List<Map<String, dynamic>> _classes = [];
+  int? _selectedClassId;
+  bool _classesLoaded = false;
+
   @override
   void initState() {
     super.initState();
+    _initLoad();
+  }
+
+  /// Pertama kali masuk: kalau teacher, fetch kelas dulu baru fetch task.
+  Future<void> _initLoad() async {
+    if (widget.session.user?.isTeacher == true) {
+      await _loadClasses();
+    } else {
+      _load();
+    }
+  }
+
+  /// Fetch daftar kelas yang bisa diakses teacher.
+  Future<void> _loadClasses() async {
+    try {
+      final classes = await widget.session.api.fetchClasses();
+      if (!mounted) return;
+      setState(() {
+        _classes = classes;
+        _classesLoaded = true;
+        // Auto-pilih kelas pertama kalau belum ada pilihan
+        if (_selectedClassId == null && classes.isNotEmpty) {
+          _selectedClassId = classes.first['id'] as int;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _classesLoaded = true);
+    }
     _load();
   }
 
   void _load() {
-    _tasksFuture = widget.session.api.fetchTasks();
-    _studentSubmissionsFuture = widget.session.user?.isStudent == true
-        ? widget.session.api.fetchSubmissions()
-        : null;
+    setState(() {
+      _tasksFuture = widget.session.api.fetchTasks(
+        classId: _selectedClassId,
+      );
+      _studentSubmissionsFuture = widget.session.user?.isStudent == true
+          ? widget.session.api.fetchSubmissions()
+          : null;
+    });
   }
 
   void _refresh() {
-    setState(_load);
+    if (widget.session.user?.isTeacher == true) {
+      _loadClasses();
+    } else {
+      _load();
+    }
   }
 
   Future<void> _reloadTasks() async {
-    final nextTasks = widget.session.api.fetchTasks();
+    final nextTasks = widget.session.api.fetchTasks(
+      classId: _selectedClassId,
+    );
     final nextSubmissions = widget.session.user?.isStudent == true
         ? widget.session.api.fetchSubmissions()
         : null;
@@ -73,7 +117,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final created = await Navigator.of(context).push<bool>(
       appPageRoute(CreateTaskScreen(session: widget.session)),
     );
-
     if (created == true) {
       await _reloadTasks();
     }
@@ -86,6 +129,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final themeModeController = ThemeModeScope.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final user = widget.session.user;
+    final isTeacher = user?.isTeacher == true;
 
     return Scaffold(
       appBar: AppBar(
@@ -101,13 +145,39 @@ class _TaskListScreenState extends State<TaskListScreen> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              'Hello, ${user?.name ?? 'Student'}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+            // Teacher: tampilkan dropdown kelas
+            // Student: tampilkan sapaan biasa
+            if (isTeacher && _classes.isNotEmpty)
+              _ClassDropdown(
+                classes: _classes,
+                selectedClassId: _selectedClassId,
+                onChanged: (classId) {
+                  setState(() => _selectedClassId = classId);
+                  _load();
+                },
+              )
+            else if (isTeacher && !_classesLoaded)
+              Text(
+                'Memuat kelas...',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              )
+            else if (isTeacher && _classesLoaded && _classes.isEmpty)
+              Text(
+                'Tidak ada kelas',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              Text(
+                'Hello, ${user?.name ?? 'Student'}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
           ],
         ),
         actions: [
@@ -142,7 +212,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         ],
       ),
-      floatingActionButton: user?.isTeacher == true
+      floatingActionButton: isTeacher
           ? FloatingActionButton.extended(
               onPressed: _openCreateTask,
               icon: const Icon(Icons.add),
@@ -171,20 +241,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
               future: _studentSubmissionsFuture,
               builder: (context, submissionsSnapshot) {
                 final submissions = submissionsSnapshot.data ?? [];
-                debugPrint(
-                  'TASK LIST STUDENT SUBMISSIONS: '
-                  'state=${submissionsSnapshot.connectionState} '
-                  'count=${submissions.length}',
-                );
                 return _TaskListBody(
                   tasks: tasks,
                   activeCount: activeCount,
                   showSubmissionStatus: true,
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
                   onRefresh: _reloadTasks,
-                  onOpenTask: (task) async {
-                    await _openTaskDetail(task);
-                  },
+                  onOpenTask: _openTaskDetail,
                 );
               },
             );
@@ -196,9 +259,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             showSubmissionStatus: false,
             submissionsByTaskId: const {},
             onRefresh: _reloadTasks,
-            onOpenTask: (task) async {
-              await _openTaskDetail(task);
-            },
+            onOpenTask: _openTaskDetail,
           );
         },
       ),
@@ -229,6 +290,59 @@ class _TaskListScreenState extends State<TaskListScreen> {
     await _reloadTasks();
   }
 }
+
+// ── Dropdown Kelas (Teacher Only) ─────────────────────────────────────────────
+
+class _ClassDropdown extends StatelessWidget {
+  const _ClassDropdown({
+    required this.classes,
+    required this.selectedClassId,
+    required this.onChanged,
+  });
+
+  final List<Map<String, dynamic>> classes;
+  final int? selectedClassId;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<int>(
+        value: selectedClassId,
+        isDense: true,
+        icon: Icon(
+          Icons.arrow_drop_down,
+          size: 16,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+        dropdownColor: Theme.of(context).cardColor,
+        items: classes.map((c) {
+          return DropdownMenuItem<int>(
+            value: c['id'] as int,
+            child: Text(
+              c['name'] as String? ?? 'Kelas ${c['id']}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value != null) onChanged(value);
+        },
+      ),
+    );
+  }
+}
+
+// ── Task List Body ─────────────────────────────────────────────────────────────
 
 class _TaskListBody extends StatelessWidget {
   const _TaskListBody({
@@ -295,6 +409,8 @@ class _TaskListBody extends StatelessWidget {
     );
   }
 }
+
+// ── Summary Card ──────────────────────────────────────────────────────────────
 
 class _TaskSummaryCard extends StatelessWidget {
   const _TaskSummaryCard({
