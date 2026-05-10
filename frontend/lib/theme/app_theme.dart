@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   AppTheme._();
@@ -148,52 +147,40 @@ class AppTheme {
   }
 
   static TextTheme _textTheme(ColorScheme colorScheme) {
-    final body = GoogleFonts.dmSansTextTheme();
-    TextStyle serif(TextStyle? style) {
-      return GoogleFonts.dmSerifDisplay(
-        textStyle: style,
+    const String serifFamily = 'DMSerifDisplay';
+    const String sansFamily = 'DMSans';
+    TextStyle serif(TextStyle? base) => (base ?? const TextStyle()).copyWith(
+        fontFamily: serifFamily,
         color: colorScheme.onSurface,
         letterSpacing: 0,
       );
-    }
 
-    TextStyle sans(TextStyle? style) {
-      return GoogleFonts.dmSans(
-        textStyle: style,
+    TextStyle sans(TextStyle? base) => (base ?? const TextStyle()).copyWith(
+        fontFamily: sansFamily,
         color: colorScheme.onSurface,
         letterSpacing: 0,
       );
-    }
+    const base = TextTheme();
 
-    return body
-        .copyWith(
-          displayLarge: serif(body.displayLarge),
-          displayMedium: serif(body.displayMedium),
-          displaySmall: serif(body.displaySmall),
-          headlineLarge: serif(body.headlineLarge),
-          headlineMedium: serif(body.headlineMedium),
-          headlineSmall: serif(body.headlineSmall),
-          titleLarge: sans(body.titleLarge).copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          titleMedium: sans(body.titleMedium).copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          titleSmall: sans(body.titleSmall).copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          bodyLarge: sans(body.bodyLarge),
-          bodyMedium: sans(body.bodyMedium),
-          bodySmall: sans(body.bodySmall),
-          labelLarge: sans(body.labelLarge).copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          labelMedium: sans(body.labelMedium),
-          labelSmall: sans(body.labelSmall),
-        )
-        .apply(
-          bodyColor: colorScheme.onSurface,
-          displayColor: colorScheme.onSurface,
-        );
+    return TextTheme(
+    displayLarge:  serif(base.displayLarge),
+    displayMedium: serif(base.displayMedium),
+    displaySmall:  serif(base.displaySmall),
+    headlineLarge: serif(base.headlineLarge),
+    headlineMedium:serif(base.headlineMedium),
+    headlineSmall: serif(base.headlineSmall),
+    titleLarge:    sans(base.titleLarge)?.copyWith(fontWeight: FontWeight.w700),
+    titleMedium:   sans(base.titleMedium)?.copyWith(fontWeight: FontWeight.w700),
+    titleSmall:    sans(base.titleSmall)?.copyWith(fontWeight: FontWeight.w700),
+    bodyLarge:     sans(base.bodyLarge),
+    bodyMedium:    sans(base.bodyMedium),
+    bodySmall:     sans(base.bodySmall),
+    labelLarge:    sans(base.labelLarge)?.copyWith(fontWeight: FontWeight.w700),
+    labelMedium:   sans(base.labelMedium),
+    labelSmall:    sans(base.labelSmall),
+  ).apply(
+      displayColor: colorScheme.onSurface,
+      bodyColor: colorScheme.onSurface,
+    );
   }
 }

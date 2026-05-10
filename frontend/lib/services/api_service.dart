@@ -12,12 +12,14 @@ import 'api_exception.dart';
 class ApiService {
   ApiService({
     http.Client? client,
-    this.baseUrl = "http://192.168.100.86:8000",
+    this.baseUrl = "https://courteous-essence-production-c381.up.railway.app",
   }) : _client = client ?? http.Client();
 
   final http.Client _client;
   final String baseUrl;
   String? _token;
+
+  String? get token => _token;
 
   Map<String, String> get _headers => {
         'Accept': 'application/json',
@@ -38,14 +40,21 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    final response = await _client.post(
-      Uri.parse('$baseUrl/login'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: jsonEncode({'email': email, 'password': password}),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/login'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: jsonEncode({'email': email, 'password': password}),
+        )
+        .timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw const ApiException(
+            'Koneksi timeout. Coba lagi.',
+          ),
+        );
     debugPrint('LOGIN STATUS: ${response.statusCode}');
     debugPrint('LOGIN BODY: ${response.body}');
     debugPrint('BASE URL: $baseUrl');
@@ -154,17 +163,17 @@ class ApiService {
     );
   }
 
-Future<Submission> submitTask({
-  required int taskId,
-  required PlatformFile file,
-}) async {
-  final response = await _sendSubmission(
-    path: '/submit',
-    taskId: taskId,
-    file: file,
-  );
-  return Submission.fromJson(_decodeObject(response));
-}
+  Future<Submission> submitTask({
+    required int taskId,
+    required PlatformFile file,
+  }) async {
+    final response = await _sendSubmission(
+      path: '/submit',
+      taskId: taskId,
+      file: file,
+    );
+    return Submission.fromJson(_decodeObject(response));
+  }
 
   Future<http.Response> _sendSubmission({
     required String path,
@@ -260,6 +269,10 @@ Future<Submission> submitTask({
     }
 
     if (body is Map<String, dynamic>) {
+      final message = body['message'];
+      if (message is String && message.isNotEmpty) {
+        throw ApiException(message);
+      }
       final detail = body['detail'];
       if (detail is String) {
         throw ApiException(detail);

@@ -60,8 +60,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  void _logout() {
-    widget.session.logout();
+  Future<void> _logout() async {
+    await widget.session.logout();
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       appPageRoute(LoginScreen(session: widget.session)),
       (_) => false,
