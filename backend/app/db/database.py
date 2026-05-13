@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import text, create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import Session, declarative_base, sessionmaker, configure_mappers
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -53,3 +53,16 @@ def check_database_connection(db: Session) -> dict[str, int | str]:
         "database": "connected",
         "users_count": int(users_count),
     }
+
+
+# Import all models to register them with Base metadata
+import app.models.user
+import app.models.submission
+import app.models.task
+import app.models.grade
+import app.models.class_model
+import app.models.audit_log
+import app.models.submission_state
+
+# Eagerly resolve all relationships and mapper configurations
+configure_mappers()
