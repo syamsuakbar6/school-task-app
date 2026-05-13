@@ -9,8 +9,12 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.get("", response_model=list[TaskResponse])
-def list_tasks(db: DBSession, current_user=Depends(get_current_user)) -> list[TaskResponse]:
-    tasks = TaskService.get_all_tasks(db, current_user=current_user)
+def list_tasks(
+    db: DBSession,
+    current_user=Depends(get_current_user),
+    class_id: int | None = None,
+) -> list[TaskResponse]:
+    tasks = TaskService.get_all_tasks(db, current_user=current_user, class_id=class_id)
     return [TaskService.to_response(task) for task in tasks]
 
 
