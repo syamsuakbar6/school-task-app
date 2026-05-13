@@ -235,6 +235,7 @@ class ApiService {
     );
     return Submission.fromJson(_decodeObject(response));
   }
+}
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -270,27 +271,31 @@ class ApiService {
   }
 
   Object? _decode(http.Response response) {
-    final body = response.body.isEmpty ? null : jsonDecode(response.body);
+  dynamic body;
+  try {
+    body = response.body.isEmpty ? null : jsonDecode(response.body);
+  } catch (_) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return body;
+      return null;
     }
-
-    if (body is Map<String, dynamic>) {
-      final message = body['message'];
-      if (message is String && message.isNotEmpty) {
-        throw ApiException(message);
-      }
-      final detail = body['detail'];
-      if (detail is String) {
-        throw ApiException(detail);
-      }
-      if (detail != null) {
-        throw ApiException(jsonEncode(detail));
-      }
-    }
-
-    throw ApiException('Request failed with status ${response.statusCode}.');
+    throw ApiException(
+      'Server error (${response.statusCode}). Coba lagi nanti.',
+    );
   }
+
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+    return body;
+  }
+
+  if (body is Map<String, dynamic>) {
+    final message = body['message'];
+    if (message is String && message.isNotEmpty) throw ApiException(message);
+    final detail = body['detail'];
+    if (detail is String) throw ApiException(detail);
+    if (detail != null) throw ApiException(jsonEncode(detail));
+  }
+
+  throw ApiException('Request failed with status ${response.statusCode}.');
 }
 
 class DownloadedSubmissionFile {
