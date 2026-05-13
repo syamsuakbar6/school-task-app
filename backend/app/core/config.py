@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     )
 
     SECRET_KEY: str = (
-        "change-this-secret-key-to-a-long-random-string-with-32-plus-characters"
+        "0a8!+oey9@@d#*k$)xb$3hj3fx-aojmy2kunry39vg+qkmb3m9"
     )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     ALLOWED_UPLOAD_EXTENSIONS: str = ".pdf,.docx,.png,.jpg,.jpeg,.txt,.zip"
 
     # Supabase Storage
-    SUPABASE_URL: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_URL: str = "https://skfihhjiohhmuhgurwfx.supabase.co"
+    SUPABASE_SERVICE_ROLE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrZmloaGppb2hobXVoZ3Vyd2Z4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzczMDM2MCwiZXhwIjoyMDkzMzA2MzYwfQ.Wj1XceoXITXdVHo_wUUwtn2BEsIL1xW67VFHJg5-EeA"
     SUPABASE_BUCKET: str = "submissions"
 
     @field_validator("SECRET_KEY")
