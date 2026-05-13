@@ -9,6 +9,16 @@ from app.core.error_handlers import register_error_handlers
 from app.db.database import check_database_connection, get_db
 from app.routers import auth, class_router, submission, task
 
+# TAMBAHKAN INI — pastikan semua model ter-register ke SQLAlchemy
+# sebelum query pertama dijalankan
+import app.models.user          # noqa: F401
+import app.models.task          # noqa: F401
+import app.models.submission    # noqa: F401
+import app.models.grade         # noqa: F401
+import app.models.class_model   # noqa: F401
+import app.models.audit_log     # noqa: F401
+import app.models.submission_state  # noqa: F401
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
