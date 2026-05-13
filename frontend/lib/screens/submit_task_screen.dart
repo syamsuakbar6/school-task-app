@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/task.dart';
 import '../services/auth_session.dart';
+import '../services/notification_service.dart';
 import '../widgets/gradient_action_button.dart';
 
 class SubmitTaskScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class SubmitTaskScreen extends StatefulWidget {
 class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
   PlatformFile? _selectedFile;
   bool _isUploading = false;
-  String? _statusMessage;
+  String? _errorMessage;
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -38,40 +39,117 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
       ],
       withData: true,
     );
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
+    if (result == null || result.files.isEmpty) return;
 
     setState(() {
       _selectedFile = result.files.single;
-      _statusMessage = null;
+      _errorMessage = null;
     });
   }
 
   Future<void> _upload() async {
     final file = _selectedFile;
     if (file == null) {
-      setState(() => _statusMessage = 'Choose a file before uploading.');
+      setState(() => _errorMessage = 'Pilih file terlebih dahulu.');
       return;
     }
 
     setState(() {
       _isUploading = true;
-      _statusMessage = null;
+      _errorMessage = null;
     });
 
     try {
-      await widget.session.api.submitTask(taskId: widget.task.id, file: file);
+      await widget.session.api.submitTask(
+        taskId: widget.task.id,
+        file: file,
+      );
+
       if (!mounted) return;
-      setState(() => _statusMessage = 'Upload completed.');
-      Navigator.of(context).pop(true);
+
+      // Kirim notifikasi sistem
+      await NotificationService.showSubmitSuccess(widget.task.title);
+
+      // Tampilkan popup sukses di dalam app
+      await _showSuccessDialog();
+
     } catch (error) {
-      setState(() => _statusMessage = error.toString());
+      if (!mounted) return;
+      setState(() => _errorMessage = error.toString());
     } finally {
       if (mounted) {
         setState(() => _isUploading = false);
       }
     }
+  }
+
+  Future<void> _showSuccessDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final theme = Theme.of(context);
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: 48,
+                  color: Colors.green.shade600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Tugas Berhasil Dikirim!',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '"${widget.task.title}" sudah terkirim.\nTunggu penilaian dari guru ya!',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // tutup dialog
+                Navigator.of(context).pop(true); // kembali ke task list
+              },
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(140, 46),
+                backgroundColor: Colors.green.shade600,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Oke, Siap!'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -104,20 +182,22 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
           ),
           const SizedBox(height: 24),
           GradientActionButton(
-            label: _isUploading ? 'Uploading' : 'Upload',
+            label: _isUploading ? 'Mengirim...' : 'Kirim Tugas',
             icon: Icons.cloud_upload_outlined,
             onPressed: _isUploading ? null : _upload,
             isLoading: _isUploading,
           ),
-          if (_statusMessage != null) ...[
+          if (_errorMessage != null) ...[
             const SizedBox(height: 16),
-            _StatusMessage(message: _statusMessage!),
+            _StatusMessage(message: _errorMessage!),
           ],
         ],
       ),
     );
   }
 }
+
+// ── File Dropzone ─────────────────────────────────────────────────────────────
 
 class _FileDropzone extends StatelessWidget {
   const _FileDropzone({
@@ -195,8 +275,15 @@ class _FileDropzone extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Tap to choose a file',
+                          'Tap untuk pilih file',
                           style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'PDF, DOCX, PNG, JPG, TXT, ZIP',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
@@ -246,10 +333,7 @@ class _DashedBorderPainter extends CustomPainter {
       while (distance < metric.length) {
         final next = distance + dashWidth;
         final end = next.clamp(0.0, metric.length).toDouble();
-        canvas.drawPath(
-          metric.extractPath(distance, end),
-          paint,
-        );
+        canvas.drawPath(metric.extractPath(distance, end), paint);
         distance = next + dashSpace;
       }
     }
@@ -261,6 +345,8 @@ class _DashedBorderPainter extends CustomPainter {
   }
 }
 
+// ── Status Message ────────────────────────────────────────────────────────────
+
 class _StatusMessage extends StatelessWidget {
   const _StatusMessage({required this.message});
 
@@ -269,27 +355,22 @@ class _StatusMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isSuccess = message.toLowerCase().contains('completed');
-    final color = isSuccess ? Colors.green.shade700 : colorScheme.error;
 
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: colorScheme.error.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(
-            isSuccess ? Icons.check_circle_outline : Icons.error_outline,
-            color: color,
-          ),
+          Icon(Icons.error_outline, color: colorScheme.error),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
-                color: color,
+                color: colorScheme.error,
                 fontWeight: FontWeight.w700,
               ),
             ),

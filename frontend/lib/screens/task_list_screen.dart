@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/submission.dart';
 import '../models/task.dart';
 import '../services/auth_session.dart';
+import '../services/notification_service.dart';
 import '../theme/theme_mode_scope.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/app_error_view.dart';
@@ -28,7 +29,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Task>> _tasksFuture;
   Future<List<Submission>>? _studentSubmissionsFuture;
 
-  // State untuk multi-class (teacher only)
+  // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
   int? _selectedClassId;
   bool _classesLoaded = false;
@@ -39,16 +40,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
     _initLoad();
   }
 
-  /// Pertama kali masuk: kalau teacher, fetch kelas dulu baru fetch task.
   Future<void> _initLoad() async {
     if (widget.session.user?.isTeacher == true) {
       await _loadClasses();
     } else {
       _load();
     }
+    // Cek deadline saat app dibuka (in-app check)
+    await NotificationService.checkAndNotifyDeadlines();
   }
 
-  /// Fetch daftar kelas yang bisa diakses teacher.
   Future<void> _loadClasses() async {
     try {
       final classes = await widget.session.api.fetchClasses();
@@ -56,7 +57,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
       setState(() {
         _classes = classes;
         _classesLoaded = true;
-        // Auto-pilih kelas pertama kalau belum ada pilihan
         if (_selectedClassId == null && classes.isNotEmpty) {
           _selectedClassId = classes.first['id'] as int;
         }
@@ -70,13 +70,57 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   void _load() {
     setState(() {
-      _tasksFuture = widget.session.api.fetchTasks(
-        classId: _selectedClassId,
-      );
+      _tasksFuture = _fetchAndCacheTasks();
       _studentSubmissionsFuture = widget.session.user?.isStudent == true
           ? widget.session.api.fetchSubmissions()
           : null;
     });
+  }
+
+  /// Fetch tasks dari API, sort by deadline, lalu cache untuk notifikasi.
+  Future<List<Task>> _fetchAndCacheTasks() async {
+    final tasks = await widget.session.api.fetchTasks(
+      classId: _selectedClassId,
+    );
+
+    // Sort: deadline terdekat di atas, task tanpa deadline di bawah
+    tasks.sort((a, b) {
+      if (a.deadline == null && b.deadline == null) return 0;
+      if (a.deadline == null) return 1;  // a ke bawah
+      if (b.deadline == null) return -1; // b ke bawah
+      return a.deadline!.compareTo(b.deadline!);
+    });
+
+    // Cache task untuk background notification service
+    // Hanya untuk student (yang perlu submit)
+    if (widget.session.user?.isStudent == true) {
+      await _cacheTasksForNotification(tasks);
+    }
+
+    return tasks;
+  }
+
+  /// Simpan task ke cache dengan format yang dibutuhkan NotificationService.
+  Future<void> _cacheTasksForNotification(List<Task> tasks) async {
+    // Ambil submission student untuk tahu mana yang sudah disubmit
+    List<Submission> submissions = [];
+    try {
+      submissions = await widget.session.api.fetchSubmissions();
+    } catch (_) {}
+
+    final submittedTaskIds = submissions.map((s) => s.taskId).toSet();
+
+    final taskMaps = tasks
+        .where((t) => t.deadline != null && !t.isClosed)
+        .map((t) => {
+              'id': t.id,
+              'title': t.title,
+              'deadline': t.deadline?.toUtc().toIso8601String(),
+              'submitted': submittedTaskIds.contains(t.id),
+            })
+        .toList();
+
+    await NotificationService.cacheTasks(taskMaps);
   }
 
   void _refresh() {
@@ -88,9 +132,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Future<void> _reloadTasks() async {
-    final nextTasks = widget.session.api.fetchTasks(
-      classId: _selectedClassId,
-    );
+    final nextTasks = _fetchAndCacheTasks();
     final nextSubmissions = widget.session.user?.isStudent == true
         ? widget.session.api.fetchSubmissions()
         : null;
@@ -99,9 +141,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       _studentSubmissionsFuture = nextSubmissions;
     });
     await nextTasks;
-    if (nextSubmissions != null) {
-      await nextSubmissions;
-    }
+    if (nextSubmissions != null) await nextSubmissions;
   }
 
   Future<void> _logout() async {
@@ -117,9 +157,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final created = await Navigator.of(context).push<bool>(
       appPageRoute(CreateTaskScreen(session: widget.session)),
     );
-    if (created == true) {
-      await _reloadTasks();
-    }
+    if (created == true) await _reloadTasks();
+  }
+
+  Future<void> _openTaskDetail(Task task) async {
+    await Navigator.of(context).push(
+      appPageRoute(
+        TaskDetailScreen(
+          session: widget.session,
+          taskId: task.id,
+        ),
+      ),
+    );
+    await _reloadTasks();
   }
 
   @override
@@ -145,8 +195,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
               ),
             ),
             const SizedBox(height: 2),
-            // Teacher: tampilkan dropdown kelas
-            // Student: tampilkan sapaan biasa
             if (isTeacher && _classes.isNotEmpty)
               _ClassDropdown(
                 classes: _classes,
@@ -182,18 +230,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-            onPressed: () {
-              themeModeController.toggleFromBrightness(theme.brightness);
-            },
+            tooltip: isDark ? 'Light mode' : 'Dark mode',
+            onPressed: () =>
+                themeModeController.toggleFromBrightness(theme.brightness),
             icon: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
-                );
-              },
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
               child: Icon(
                 isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                 key: ValueKey<bool>(isDark),
@@ -234,7 +279,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           }
 
           final tasks = snapshot.data ?? [];
-          final activeCount = tasks.where((task) => !task.isClosed).length;
+          final activeCount = tasks.where((t) => !t.isClosed).length;
 
           if (user?.isStudent == true && _studentSubmissionsFuture != null) {
             return FutureBuilder<List<Submission>>(
@@ -268,30 +313,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   Map<int, Submission> _latestSubmissionByTaskId(List<Submission> submissions) {
     final byTaskId = <int, Submission>{};
-    for (final submission in submissions) {
-      final current = byTaskId[submission.taskId];
-      if (current == null ||
-          submission.submittedAt.isAfter(current.submittedAt)) {
-        byTaskId[submission.taskId] = submission;
+    for (final s in submissions) {
+      final current = byTaskId[s.taskId];
+      if (current == null || s.submittedAt.isAfter(current.submittedAt)) {
+        byTaskId[s.taskId] = s;
       }
     }
     return byTaskId;
   }
-
-  Future<void> _openTaskDetail(Task task) async {
-    await Navigator.of(context).push(
-      appPageRoute(
-        TaskDetailScreen(
-          session: widget.session,
-          taskId: task.id,
-        ),
-      ),
-    );
-    await _reloadTasks();
-  }
 }
 
-// ── Dropdown Kelas (Teacher Only) ─────────────────────────────────────────────
+// ── Class Dropdown ────────────────────────────────────────────────────────────
 
 class _ClassDropdown extends StatelessWidget {
   const _ClassDropdown({
@@ -312,11 +344,8 @@ class _ClassDropdown extends StatelessWidget {
       child: DropdownButton<int>(
         value: selectedClassId,
         isDense: true,
-        icon: Icon(
-          Icons.arrow_drop_down,
-          size: 16,
-          color: colorScheme.onSurfaceVariant,
-        ),
+        icon: Icon(Icons.arrow_drop_down,
+            size: 16, color: colorScheme.onSurfaceVariant),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -342,7 +371,7 @@ class _ClassDropdown extends StatelessWidget {
   }
 }
 
-// ── Task List Body ─────────────────────────────────────────────────────────────
+// ── Task List Body ────────────────────────────────────────────────────────────
 
 class _TaskListBody extends StatelessWidget {
   const _TaskListBody({
@@ -385,8 +414,8 @@ class _TaskListBody extends StatelessWidget {
               height: 360,
               child: EmptyState(
                 icon: Icons.assignment_outlined,
-                title: 'No tasks yet',
-                message: 'Assigned tasks will appear here.',
+                title: 'Belum ada tugas',
+                message: 'Tugas yang diberikan akan muncul di sini.',
               ),
             );
           }
@@ -450,10 +479,7 @@ class _TaskSummaryCard extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.16),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(
-                Icons.assignment_outlined,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.assignment_outlined, color: Colors.white),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -461,15 +487,15 @@ class _TaskSummaryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$activeCount Active ${activeCount == 1 ? 'Task' : 'Tasks'}',
+                    '$activeCount Tugas Aktif',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
-                      fontSize: 28,
+                      fontSize: 26,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$totalCount total ${totalCount == 1 ? 'assignment' : 'assignments'} in your workspace',
+                    '$totalCount total tugas • diurutkan by deadline',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: 0.76),
                       fontWeight: FontWeight.w600,

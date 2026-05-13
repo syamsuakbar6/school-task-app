@@ -16,6 +16,8 @@ dependencies:
   intl: ^0.19.0
   shared_preferences: ^2.3.5
   flutter_secure_storage: ^10.1.0
+  flutter_local_notifications: ^18.0.0
+  workmanager: ^0.7.0
 
 dev_dependencies:
   flutter_test:
@@ -24,7 +26,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
+
   fonts:
     - family: DMSans
       fonts:

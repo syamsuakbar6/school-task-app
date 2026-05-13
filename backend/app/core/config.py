@@ -31,9 +31,16 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # Local storage (fallback kalau Supabase tidak dikonfigurasi)
     STORAGE_DIR: str = "uploads/submissions"
     MAX_UPLOAD_SIZE_MB: int = 5
     ALLOWED_UPLOAD_EXTENSIONS: str = ".pdf,.docx,.png,.jpg,.jpeg,.txt,.zip"
+
+    # Supabase Storage
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_BUCKET: str = "submissions"
 
     @field_validator("SECRET_KEY")
     @classmethod
@@ -61,6 +68,11 @@ class Settings(BaseSettings):
             for extension in self.ALLOWED_UPLOAD_EXTENSIONS.split(",")
             if extension.strip()
         }
+
+    @property
+    def supabase_enabled(self) -> bool:
+        """True kalau Supabase sudah dikonfigurasi."""
+        return bool(self.SUPABASE_URL and self.SUPABASE_SERVICE_ROLE_KEY)
 
 
 @lru_cache

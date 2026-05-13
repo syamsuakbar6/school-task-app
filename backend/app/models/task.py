@@ -1,20 +1,34 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from fastapi import APIRouter, Depends, status
 
-from app.db.database import Base
-from app.utils.datetime_utils import utc_now_naive
+from app.core.dependencies import DBSession, get_current_user, require_teacher
+from app.schemas.task_schema import TaskCreate, TaskResponse
+from app.services.task_service import TaskService
 
 
-class Task(Base):
-    __tablename__ = "tasks"
+router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    deadline = Column(DateTime, nullable=True)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False, index=True)
-    created_at = Column(DateTime, nullable=False, default=utc_now_naive)
 
-    creator = relationship("User", back_populates="tasks")
-    submissions = relationship("Submission", back_populates="task")
+@router.get("", response_model=list[TaskResponse])
+def list_tasks(
+    db: DBSession,
+    current_user=Depends(get_current_user),
+    class_id: int | None = None,
+) -> list[TaskResponse]:
+    tasks = TaskService.get_all_tasks(db, current_user=current_user, class_id=class_id)
+    return [TaskService.to_response(task) for task in tasks]
+
+
+@router.get("/{task_id}", response_model=TaskResponse)
+def get_task(task_id: int, db: DBSession, current_user=Depends(get_current_user)) -> TaskResponse:
+    task = TaskService.get_task_by_id(db, task_id, current_user=current_user)
+    return TaskService.to_response(task)
+
+
+@router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+def create_task(
+    task_in: TaskCreate,
+    db: DBSession,
+    current_teacher=Depends(require_teacher),
+) -> TaskResponse:
+    task = TaskService.create_task(db, task_in, current_teacher)
+    return TaskService.to_response(task)

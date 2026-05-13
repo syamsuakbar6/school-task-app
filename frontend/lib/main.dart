@@ -1,16 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/task_list_screen.dart';
 import 'services/api_service.dart';
 import 'services/auth_session.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_mode_scope.dart';
 
+// ── Background Task Name ───────────────────────────────────────────────────────
+const _kDeadlineCheckTask = 'deadline_check_task';
+
+/// Callback yang dijalankan oleh Workmanager di background isolate.
+/// HARUS top-level function (tidak boleh di dalam class).
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((taskName, inputData) async {
+    if (taskName == _kDeadlineCheckTask) {
+      // Inisialisasi notifikasi dulu karena ini isolate baru
+      await NotificationService.init();
+      await NotificationService.checkAndNotifyDeadlines();
+    }
+    return Future.value(true);
+  });
+}
+
+// ── Theme Controller ───────────────────────────────────────────────────────────
 final ThemeModeController themeModeNotifier = ThemeModeController();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Init notifikasi
+  await NotificationService.init();
+
+  // Init workmanager untuk background task
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: false, // set true kalau mau lihat log workmanager
+  );
+
+  // Daftarkan background task: cek deadline setiap 1 jam
+  await Workmanager().registerPeriodicTask(
+    _kDeadlineCheckTask,
+    _kDeadlineCheckTask,
+    frequency: const Duration(hours: 1),
+    constraints: Constraints(
+      networkType: NetworkType.not_required,
+    ),
+    existingWorkPolicy: ExistingWorkPolicy.keep,
+  );
+
   await themeModeNotifier.loadPreference();
   runApp(const SchoolTaskApp());
 }

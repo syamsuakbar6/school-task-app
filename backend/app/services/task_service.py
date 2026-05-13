@@ -51,12 +51,19 @@ class TaskService:
         )
 
     @staticmethod
-    def get_all_tasks(db: Session, *, current_user: User) -> list[Task]:
+    def get_all_tasks(
+        db: Session,
+        *,
+        current_user: User,
+        class_id: int | None = None,
+    ) -> list[Task]:
         statement = (
             select(Task)
             .options(joinedload(Task.creator))
             .order_by(Task.created_at.desc())
         )
+
+        # Ambil semua kelas yang bisa diakses user ini
         class_ids = ClassAccessService.get_user_classes(
             db,
             user_id=current_user.id,
@@ -66,7 +73,15 @@ class TaskService:
         if not class_ids:
             return []
 
-        statement = statement.where(Task.class_id.in_(class_ids))
+        if class_id is not None:
+            # Kalau class_id diminta tapi user tidak punya akses ke kelas itu → return kosong
+            if class_id not in class_ids:
+                return []
+            statement = statement.where(Task.class_id == class_id)
+        else:
+            # Tampilkan semua task dari semua kelas yang accessible
+            statement = statement.where(Task.class_id.in_(class_ids))
+
         return list(db.scalars(statement).all())
 
     @staticmethod
@@ -131,7 +146,6 @@ class TaskService:
         deadline_epoch = TaskService.deadline_epoch_utc(task.deadline)
         if deadline_epoch is None:
             return False
-        # Production-grade comparison uses epoch seconds in UTC.
         return TaskService.now_epoch_utc() >= deadline_epoch
 
     @staticmethod
@@ -139,9 +153,6 @@ class TaskService:
         normalized_deadline = TaskService.validate_deadline_for_creation(deadline)
         if normalized_deadline is None:
             return None
-
-        # The existing schema may store naive timestamps, so we persist UTC without timezone info
-        # and always restore UTC awareness when comparing or serializing.
         return normalized_deadline.replace(tzinfo=None)
 
     @staticmethod
