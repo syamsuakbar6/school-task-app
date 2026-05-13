@@ -23,7 +23,7 @@ def register(user_in: UserCreate, db: DBSession) -> UserResponse:
 def login(credentials: UserLogin, db: DBSession) -> TokenResponse:
     user = AuthService.authenticate_user(
         db,
-        email=credentials.email,
+        identifier=credentials.identifier,
         password=credentials.password,
     )
     return TokenResponse(**AuthService.build_login_response(user))

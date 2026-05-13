@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/api_exception.dart';
 import '../services/auth_session.dart';
@@ -19,24 +20,30 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
+
+  // Deteksi otomatis role dari panjang identifier
+  String get _detectedRole {
+    final len = _identifierController.text.trim().length;
+    if (len == 10) return 'Siswa (NISN)';
+    if (len == 18) return 'Guru (NIP)';
+    return '';
+  }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
-    debugPrint('LOGIN FUNCTION TRIGGERED');
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
       _isLoading = true;
@@ -45,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await widget.session.login(
-        email: _emailController.text.trim(),
+        identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
 
@@ -55,15 +62,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } on ApiException catch (error) {
       setState(() => _errorMessage = error.message);
-    } catch (e, st) {
-      debugPrint('LOGIN ERROR: $e');
-      debugPrint('STACKTRACE: $st');
-      setState(() =>
-          _errorMessage = e.toString()); // Show real error in UI during dev
+    } catch (e) {
+      setState(() => _errorMessage = 'Terjadi kesalahan. Coba lagi.');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -80,14 +82,8 @@ class _LoginScreenState extends State<LoginScreen> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isDark
-                ? const [
-                    Color(0xFF111318),
-                    Color(0xFF1A1D26),
-                  ]
-                : [
-                    colorScheme.surface,
-                    const Color(0xFFEEF1FF),
-                  ],
+                ? const [Color(0xFF111318), Color(0xFF1A1D26)]
+                : [colorScheme.surface, const Color(0xFFEEF1FF)],
           ),
         ),
         child: SafeArea(
@@ -133,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Sign in to manage assignments and submissions.',
+                        'Masuk menggunakan NISN (siswa) atau NIP (guru).',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -143,37 +139,57 @@ class _LoginScreenState extends State<LoginScreen> {
                         _LoginError(message: _errorMessage!),
                         const SizedBox(height: 16),
                       ],
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(
-                            Icons.email_outlined,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                        validator: (value) {
-                          final email = value?.trim() ?? '';
-                          if (email.isEmpty) return 'Email is required';
-                          if (!email.contains('@')) {
-                            return 'Enter a valid email';
-                          }
-                          return null;
+
+                      // Input NISN / NIP
+                      ValueListenableBuilder(
+                        valueListenable: _identifierController,
+                        builder: (context, value, _) {
+                          return TextFormField(
+                            controller: _identifierController,
+                            keyboardType: TextInputType.number,
+                            textInputAction: TextInputAction.next,
+                            maxLength: 18,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'NISN / NIP',
+                              hintText: 'Masukkan NISN (10 digit) atau NIP (18 digit)',
+                              prefixIcon: Icon(
+                                Icons.badge_outlined,
+                                color: colorScheme.primary,
+                              ),
+                              suffixText: _detectedRole,
+                              suffixStyle: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                              counterText: '',
+                            ),
+                            validator: (value) {
+                              final v = value?.trim() ?? '';
+                              if (v.isEmpty) return 'NISN atau NIP wajib diisi';
+                              if (!RegExp(r'^\d+$').hasMatch(v)) {
+                                return 'Hanya boleh angka';
+                              }
+                              if (v.length != 10 && v.length != 18) {
+                                return 'NISN harus 10 digit, NIP harus 18 digit';
+                              }
+                              return null;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(height: 16),
+
+                      // Input Password
                       TextFormField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.password],
                         onFieldSubmitted: (_) {
-                          if (!_isLoading) {
-                            _login();
-                          }
+                          if (!_isLoading) _login();
                         },
                         decoration: InputDecoration(
                           labelText: 'Password',
@@ -181,38 +197,43 @@ class _LoginScreenState extends State<LoginScreen> {
                             Icons.lock_outline,
                             color: colorScheme.primary,
                           ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
+                          ),
                         ),
                         validator: (value) {
-                          if ((value ?? '').isEmpty) {
-                            return 'Password is required';
-                          }
+                          if ((value ?? '').isEmpty) return 'Password wajib diisi';
                           if ((value ?? '').length < 8) {
-                            return 'Password must be at least 8 characters';
+                            return 'Password minimal 8 karakter';
                           }
                           return null;
                         },
                       ),
                       const SizedBox(height: 24),
+
                       FilledButton(
                         onPressed: _isLoading ? null : _login,
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
-                          textStyle: theme.textTheme.labelLarge?.copyWith(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
                         ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          child: _isLoading
-                              ? const _LoadingShimmerLabel(
-                                  key: ValueKey('loading'),
-                                )
-                              : const Text(
-                                  'Login',
-                                  key: ValueKey('login'),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
-                        ),
+                              )
+                            : const Text('Masuk'),
                       ),
                     ],
                   ),
@@ -254,10 +275,7 @@ class _LoginError extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Icon(
-            Icons.error_outline,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline, color: colorScheme.error),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -271,74 +289,5 @@ class _LoginError extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _LoadingShimmerLabel extends StatefulWidget {
-  const _LoadingShimmerLabel({super.key});
-
-  @override
-  State<_LoadingShimmerLabel> createState() => _LoadingShimmerLabelState();
-}
-
-class _LoadingShimmerLabelState extends State<_LoadingShimmerLabel>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (bounds) {
-            final width = bounds.width;
-            final offset = _controller.value * width * 2;
-            return LinearGradient(
-              colors: [
-                colorScheme.onPrimary.withValues(alpha: 0.55),
-                colorScheme.onPrimary,
-                colorScheme.onPrimary.withValues(alpha: 0.55),
-              ],
-              stops: const [0.15, 0.5, 0.85],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              transform: _SlidingGradientTransform(offset - width),
-            ).createShader(bounds);
-          },
-          child: child,
-        );
-      },
-      child: const Text('Signing in'),
-    );
-  }
-}
-
-class _SlidingGradientTransform extends GradientTransform {
-  const _SlidingGradientTransform(this.offset);
-
-  final double offset;
-
-  @override
-  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
-    return Matrix4.translationValues(offset, 0, 0);
   }
 }

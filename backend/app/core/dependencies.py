@@ -41,10 +41,9 @@ def get_current_user(
         raise credentials_exception from exc
 
     subject = payload.get("sub")
-    email = payload.get("email")
     role = payload.get("role")
 
-    if subject is None or email is None or role is None:
+    if subject is None or role is None:
         raise credentials_exception
 
     try:
@@ -58,9 +57,6 @@ def get_current_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found.",
         )
-
-    if user.email.lower() != str(email).lower():
-        raise credentials_exception
 
     user_role = UserRole(ClassAccessService.normalize_role(user.role))
     token_role = UserRole(ClassAccessService.normalize_role(role))

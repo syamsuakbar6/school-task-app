@@ -17,7 +17,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    email = Column(String, nullable=False, unique=True, index=True)
+    email = Column(String, nullable=True, unique=True, index=True)
+    nisn = Column(String(10), nullable=True, unique=True, index=True)
+    nip = Column(String(18), nullable=True, unique=True, index=True)
     password = Column(String, nullable=False)
     role = Column(String, nullable=False)
     created_at = Column(DateTime, nullable=False, default=utc_now_naive)

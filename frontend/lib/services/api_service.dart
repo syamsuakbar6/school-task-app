@@ -37,7 +37,7 @@ class ApiService {
   }
 
   Future<AppUser> login({
-    required String email,
+    required String identifier,
     required String password,
   }) async {
     final response = await _client
@@ -45,24 +45,25 @@ class ApiService {
           Uri.parse('$baseUrl/login'),
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
           },
-          body: jsonEncode({'email': email, 'password': password}),
+          body: jsonEncode({
+            'identifier': identifier,
+            'password': password,
+          }),
         )
         .timeout(
           const Duration(seconds: 30),
-          onTimeout: () => throw const ApiException(
-            'Koneksi timeout. Coba lagi.',
-          ),
+          onTimeout: () => throw const ApiException('Koneksi timeout. Coba lagi.'),
         );
+
     debugPrint('LOGIN STATUS: ${response.statusCode}');
     debugPrint('LOGIN BODY: ${response.body}');
-    debugPrint('BASE URL: $baseUrl');
 
     final data = _decodeObject(response);
     final token = data['access_token'] as String?;
     if (token == null || token.isEmpty) {
-      throw const ApiException('Login response did not include a token.');
+      throw const ApiException('Login gagal, token tidak ditemukan.');
     }
 
     setToken(token);
