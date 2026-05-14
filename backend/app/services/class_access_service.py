@@ -24,10 +24,11 @@ class ClassAccessService:
     @staticmethod
     def normalize_role(role: str | None) -> str:
         normalized = str(role).strip().lower() if role is not None else ""
-        if normalized not in {UserRole.TEACHER.value, UserRole.STUDENT.value}:
+        allowed = {UserRole.TEACHER.value, UserRole.STUDENT.value, "admin"}
+        if normalized not in allowed:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Unsupported user role.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Unsupported user role.",
             )
         return normalized
 

@@ -10,6 +10,7 @@ from app.utils.datetime_utils import utc_now_naive
 class UserRole(StrEnum):
     STUDENT = "student"
     TEACHER = "teacher"
+    ADMIN = "admin"
 
 
 class User(Base):
