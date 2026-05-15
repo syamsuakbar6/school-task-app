@@ -22,7 +22,7 @@ def get_current_user(
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials.",
+        detail="Sesi tidak valid. Silakan login kembali.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -34,7 +34,7 @@ def get_current_user(
     except ExpiredSignatureError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired.",
+            detail="Sesi sudah kedaluwarsa. Silakan login kembali.",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
     except JWTError as exc:
@@ -55,7 +55,7 @@ def get_current_user(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found.",
+            detail="Pengguna tidak ditemukan.",
         )
 
     user_role = UserRole(ClassAccessService.normalize_role(user.role))
@@ -71,7 +71,7 @@ def require_teacher(current_user: Annotated[User, Depends(get_current_user)]) ->
     ClassAccessService.assert_user_role(
         current_user,
         expected_role=UserRole.TEACHER,
-        detail="Teacher access is required.",
+        detail="Akses guru diperlukan.",
     )
     return current_user
 
@@ -80,6 +80,6 @@ def require_student(current_user: Annotated[User, Depends(get_current_user)]) ->
     ClassAccessService.assert_user_role(
         current_user,
         expected_role=UserRole.STUDENT,
-        detail="Student access is required.",
+        detail="Akses siswa diperlukan.",
     )
     return current_user

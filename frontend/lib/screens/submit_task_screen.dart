@@ -67,10 +67,8 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
 
       if (!mounted) return;
 
-      // Kirim notifikasi sistem
       await NotificationService.showSubmitSuccess(widget.task.title);
 
-      // Tampilkan popup sukses di dalam app
       await _showSuccessDialog();
 
     } catch (error) {
@@ -134,8 +132,8 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
           actions: [
             FilledButton(
               onPressed: () {
-                Navigator.of(context).pop(); // tutup dialog
-                Navigator.of(context).pop(true); // kembali ke task list
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(true);
               },
               style: FilledButton.styleFrom(
                 minimumSize: const Size(140, 46),
@@ -160,7 +158,7 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Submit Task',
+          'Kumpulkan Tugas',
           style: theme.textTheme.headlineSmall?.copyWith(
             color: colorScheme.primary,
           ),
@@ -275,7 +273,7 @@ class _FileDropzone extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Tap untuk pilih file',
+                          'Ketuk untuk pilih file',
                           style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(height: 4),

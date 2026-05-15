@@ -34,7 +34,7 @@ class SubmissionListTile extends StatelessWidget {
     final submittedAt = DateFormat(
       'd MMM yyyy HH:mm',
     ).format(submission.submittedAt.toLocal());
-    final fileName = submission.fileName ?? 'No file attached';
+    final fileName = submission.fileName ?? 'Tidak ada file';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -94,12 +94,12 @@ class SubmissionListTile extends StatelessWidget {
                       children: [
                         _FileAction(
                           icon: Icons.visibility_outlined,
-                          label: 'Preview',
+                          label: 'Lihat',
                           onPressed: onPreviewFile,
                         ),
                         _FileAction(
                           icon: Icons.download_outlined,
-                          label: 'Download',
+                          label: 'Unduh',
                           onPressed: onDownloadFile,
                         ),
                       ],
@@ -138,19 +138,19 @@ class SubmissionListTile extends StatelessWidget {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Grade submission'),
+          title: const Text('Beri nilai pengumpulan'),
           content: TextField(
             controller: controller,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Grade',
+              labelText: 'Nilai',
               border: OutlineInputBorder(),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Batal'),
             ),
             FilledButton(
               onPressed: () {
@@ -159,7 +159,7 @@ class SubmissionListTile extends StatelessWidget {
                   Navigator.pop(context, value);
                 }
               },
-              child: const Text('Save'),
+              child: const Text('Simpan'),
             ),
           ],
         );
@@ -206,7 +206,7 @@ class _GradeAction extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'Grade $grade',
+                  'Nilai $grade',
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -228,7 +228,7 @@ class _GradeAction extends StatelessWidget {
         side: BorderSide(color: Colors.amber.shade700),
       ),
       child: Text(
-        'Add Grade',
+        'Beri nilai',
         style: theme.textTheme.labelMedium?.copyWith(
           color: colorScheme.brightness == Brightness.dark
               ? Colors.amber.shade300

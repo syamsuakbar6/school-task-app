@@ -42,7 +42,7 @@ class TaskService:
         ClassAccessService.assert_user_role(
             current_user,
             expected_role=UserRole.TEACHER,
-            detail="Only teachers can create tasks.",
+            detail="Hanya guru yang bisa membuat tugas.",
         )
         ClassAccessService.assert_teacher_assigned(
             db,
@@ -95,7 +95,7 @@ class TaskService:
         if task is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Task not found.",
+                detail="Tugas tidak ditemukan.",
             )
         if current_user is not None:
             class_id = ClassAccessService.get_task_access_class_id(db, task_class_id=task.class_id)
@@ -138,7 +138,7 @@ class TaskService:
         if TaskService.is_task_closed(task):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Deadline has passed. Submission is closed.",
+                detail="Deadline sudah lewat. Pengumpulan tugas ditutup.",
             )
 
     @staticmethod
@@ -164,7 +164,7 @@ class TaskService:
         if normalized_deadline <= TaskService.now_utc():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Deadline must be in the future.",
+                detail="Deadline harus lebih besar dari waktu sekarang.",
             )
         return normalized_deadline
 
@@ -181,7 +181,7 @@ class TaskService:
             if require_timezone:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Deadline must include timezone information in UTC.",
+                    detail="Deadline harus menyertakan timezone UTC.",
                 )
             return deadline.replace(tzinfo=timezone.utc)
 

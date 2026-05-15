@@ -64,14 +64,24 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       initialTime: TimeOfDay.fromDateTime(_deadline ?? now),
     );
 
+    final selectedDeadline = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time?.hour ?? 23,
+      time?.minute ?? 59,
+    );
+
+    if (selectedDeadline.isBefore(DateTime.now())) {
+      setState(() {
+        _errorMessage = 'Deadline tidak boleh lebih awal dari waktu sekarang.';
+      });
+      return;
+    }
+
     setState(() {
-      _deadline = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time?.hour ?? 23,
-        time?.minute ?? 59,
-      );
+      _deadline = selectedDeadline;
+      _errorMessage = null;
     });
   }
 
@@ -80,6 +90,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     final classId = _selectedClassId;
     if (classId == null) {
       setState(() => _errorMessage = 'Pilih kelas terlebih dahulu.');
+      return;
+    }
+    if (_deadline != null && _deadline!.isBefore(DateTime.now())) {
+      setState(() {
+        _errorMessage = 'Deadline tidak boleh lebih awal dari waktu sekarang.';
+      });
       return;
     }
 
@@ -206,6 +222,9 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             _DeadlinePickerCard(
               deadline: _deadline,
               onPressed: _isSaving ? null : _pickDeadline,
+              onClear: _isSaving || _deadline == null
+                  ? null
+                  : () => setState(() => _deadline = null),
             ),
             const SizedBox(height: 24),
             GradientActionButton(
@@ -225,10 +244,12 @@ class _DeadlinePickerCard extends StatelessWidget {
   const _DeadlinePickerCard({
     required this.deadline,
     required this.onPressed,
+    required this.onClear,
   });
 
   final DateTime? deadline;
   final VoidCallback? onPressed;
+  final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
@@ -237,7 +258,7 @@ class _DeadlinePickerCard extends StatelessWidget {
     final hasDeadline = deadline != null;
     final text = hasDeadline
         ? DateFormat('EEE, d MMM yyyy HH:mm').format(deadline!.toLocal())
-        : 'Tap untuk mengatur deadline';
+        : 'Opsional, ketuk untuk mengatur';
 
     return Card(
       color: hasDeadline
@@ -285,11 +306,18 @@ class _DeadlinePickerCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: colorScheme.onSurfaceVariant,
-              ),
+              if (hasDeadline)
+                IconButton(
+                  tooltip: 'Hapus deadline',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.delete_outline),
+                )
+              else
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
             ],
           ),
         ),

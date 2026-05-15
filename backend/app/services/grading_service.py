@@ -46,13 +46,13 @@ class GradingService:
         ClassAccessService.assert_user_role(
             teacher,
             expected_role=UserRole.TEACHER,
-            detail="Teacher access is required.",
+            detail="Akses guru diperlukan.",
         )
         SubmissionValidator.validate_grade_value(grade)
         if submission_id <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="submission_id must be a positive integer.",
+                detail="ID pengumpulan tidak valid.",
             )
 
         submission = db.scalar(
@@ -66,7 +66,7 @@ class GradingService:
         if submission is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Submission not found.",
+                detail="Pengumpulan tidak ditemukan.",
             )
 
         class_id = ClassAccessService.get_submission_access_class_id(submission)
@@ -82,23 +82,23 @@ class GradingService:
         if existing_grade is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Submission has already been graded.",
+                detail="Pengumpulan sudah dinilai.",
             )
 
         if submission.file_path is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot grade a submission without an attached file.",
+                detail="Pengumpulan tanpa file tidak bisa dinilai.",
             )
         if ClassAccessService.normalize_role(submission.user.role) != UserRole.STUDENT.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only student submissions can be graded.",
+                detail="Hanya pengumpulan siswa yang bisa dinilai.",
             )
         if submission.grade is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Submission has already been graded.",
+                detail="Pengumpulan sudah dinilai.",
             )
 
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)

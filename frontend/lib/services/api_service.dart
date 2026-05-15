@@ -173,7 +173,7 @@ class ApiService {
   ) async {
     final downloadUrl = submission.downloadUrl;
     if (downloadUrl == null || downloadUrl.isEmpty) {
-      throw const ApiException('This submission has no downloadable file.');
+      throw const ApiException('Pengumpulan ini tidak memiliki file.');
     }
 
     final uri = _absoluteUri(downloadUrl);
@@ -184,7 +184,7 @@ class ApiService {
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _decode(response);
-      throw ApiException('Download failed with status ${response.statusCode}.');
+      throw ApiException('Unduhan gagal (${response.statusCode}).');
     }
 
     return DownloadedSubmissionFile(
@@ -231,7 +231,7 @@ class ApiService {
         filename: file.name,
       ));
     } else {
-      throw const ApiException('Selected file is not available.');
+      throw const ApiException('File yang dipilih tidak tersedia.');
     }
 
     final streamedResponse = await request.send();
@@ -442,7 +442,7 @@ class ApiService {
     if (data is Map<String, dynamic>) {
       return data;
     }
-    throw const ApiException('Unexpected API response.');
+    throw const ApiException('Respons server tidak sesuai.');
   }
 
   List<Map<String, dynamic>> _decodeList(http.Response response) {
@@ -450,7 +450,7 @@ class ApiService {
     if (data is List) {
       return data.cast<Map<String, dynamic>>();
     }
-    throw const ApiException('Unexpected API response.');
+    throw const ApiException('Respons server tidak sesuai.');
   }
 
   Object? _decode(http.Response response) {
@@ -478,7 +478,7 @@ class ApiService {
       if (detail != null) throw ApiException(jsonEncode(detail));
     }
 
-    throw ApiException('Request failed with status ${response.statusCode}.');
+    throw ApiException('Permintaan gagal (${response.statusCode}).');
   }
 } // ← penutup class ApiService
 

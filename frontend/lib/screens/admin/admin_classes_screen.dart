@@ -225,7 +225,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
             return const EmptyState(
               icon: Icons.class_outlined,
               title: 'Belum ada kelas',
-              message: 'Tap tombol di bawah untuk membuat kelas baru.',
+              message: 'Ketuk tombol di bawah untuk membuat kelas baru.',
             );
           }
 
@@ -292,16 +292,31 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 8),
+                            Text(
+                              teachers.isEmpty
+                                  ? 'Guru: belum ditugaskan'
+                                  : 'Guru: ${_names(teachers)}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                            Wrap(
+                              alignment: WrapAlignment.end,
+                              spacing: 8,
+                              runSpacing: 6,
                               children: [
-                                IconButton(
-                                  tooltip: 'Assign siswa',
+                                OutlinedButton.icon(
                                   icon: Icon(
                                     Icons.person_add_outlined,
                                     color: colorScheme.primary,
+                                    size: 18,
                                   ),
+                                  label: const Text('Siswa'),
                                   onPressed: () => Navigator.of(context).push(
                                     appPageRoute(AdminAssignScreen(
                                       session: widget.session,
@@ -309,12 +324,13 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                     )),
                                   ).then((_) => _refresh()),
                                 ),
-                                IconButton(
-                                  tooltip: 'Assign guru',
+                                OutlinedButton.icon(
                                   icon: Icon(
                                     Icons.school_outlined,
                                     color: colorScheme.secondary,
+                                    size: 18,
                                   ),
+                                  label: const Text('Guru'),
                                   onPressed: () => Navigator.of(context).push(
                                     appPageRoute(AdminAssignTeachersScreen(
                                       session: widget.session,
@@ -322,12 +338,13 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                     )),
                                   ).then((_) => _refresh()),
                                 ),
-                                IconButton(
-                                  tooltip: 'Hapus kelas',
+                                OutlinedButton.icon(
                                   icon: Icon(
                                     Icons.delete_outline,
                                     color: colorScheme.error,
+                                    size: 18,
                                   ),
+                                  label: const Text('Hapus'),
                                   onPressed: () => _deleteClass(cls),
                                 ),
                               ],
@@ -344,6 +361,17 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
         },
       ),
     );
+  }
+
+  String _names(List<dynamic> users) {
+    final names = users
+        .map((user) => user is Map ? user['name'] as String? : null)
+        .whereType<String>()
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+    if (names.isEmpty) return '-';
+    if (names.length <= 3) return names.join(', ');
+    return '${names.take(3).join(', ')} +${names.length - 3} lainnya';
   }
 }
 

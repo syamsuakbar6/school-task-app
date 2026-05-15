@@ -83,7 +83,7 @@ class _SchoolTaskAppState extends State<SchoolTaskApp> {
         valueListenable: themeModeNotifier,
         builder: (context, themeMode, child) {
           return MaterialApp(
-            title: 'School Tasks',
+            title: 'Tugas Sekolah',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,

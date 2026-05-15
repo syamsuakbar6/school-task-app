@@ -46,14 +46,14 @@ class FileHandler:
         if not file.filename:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded file must include a filename.",
+                detail="File harus memiliki nama.",
             )
         suffix = Path(file.filename).suffix.lower()
         if suffix not in settings.allowed_upload_extensions:
             allowed = ", ".join(sorted(settings.allowed_upload_extensions))
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type. Allowed extensions: {allowed}.",
+                detail=f"Tipe file tidak didukung. Ekstensi yang diizinkan: {allowed}.",
             )
         return suffix
 
@@ -62,13 +62,13 @@ class FileHandler:
         if not contents:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded file is empty.",
+                detail="File yang diunggah kosong.",
             )
         max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if len(contents) > max_size:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File exceeds the {settings.MAX_UPLOAD_SIZE_MB} MB size limit.",
+                detail=f"Ukuran file melebihi batas {settings.MAX_UPLOAD_SIZE_MB} MB.",
             )
 
     # ── Upload ────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ class FileHandler:
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload file to storage: {str(exc)}",
+                detail=f"Gagal mengunggah file ke storage: {str(exc)}",
             ) from exc
 
     @staticmethod
@@ -193,7 +193,7 @@ class FileHandler:
 
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Stored file was not found.",
+            detail="File tersimpan tidak ditemukan.",
         )
 
     @staticmethod
@@ -215,7 +215,7 @@ class FileHandler:
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to generate download URL: {str(exc)}",
+                detail=f"Gagal membuat URL unduhan: {str(exc)}",
             ) from exc
 
     @staticmethod

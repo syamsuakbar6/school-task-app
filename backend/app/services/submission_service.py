@@ -162,7 +162,7 @@ class SubmissionService:
         ClassAccessService.assert_user_role(
             student,
             expected_role=UserRole.STUDENT,
-            detail="Only students can submit tasks.",
+            detail="Hanya siswa yang bisa mengumpulkan tugas.",
         )
 
         task = SubmissionService._get_task_or_404(db, task_id)
@@ -171,7 +171,7 @@ class SubmissionService:
         if not SubmissionService.can_submit(db, student=student, task=task):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not a member of this class.",
+                detail="Kamu belum terdaftar di kelas ini.",
             )
 
         existing = db.scalar(
@@ -187,7 +187,7 @@ class SubmissionService:
             if not SubmissionService.can_resubmit(existing):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Submission has already been graded. Resubmission is not allowed.",
+                    detail="Pengumpulan sudah dinilai. Pengumpulan ulang tidak tersedia.",
                 )
 
         previous_file_path = existing.file_path if existing is not None else None
@@ -315,7 +315,7 @@ class SubmissionService:
         if submission is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Submission not found.",
+                detail="Pengumpulan tidak ditemukan.",
             )
         return submission
 
@@ -325,7 +325,7 @@ class SubmissionService:
         if task is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Task not found.",
+                detail="Tugas tidak ditemukan.",
             )
         return task
 
@@ -341,9 +341,9 @@ class SubmissionService:
             ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You do not have access to this submission.",
+                    detail="Kamu tidak memiliki akses ke pengumpulan ini.",
                 )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this class.",
+                detail="Kamu tidak memiliki akses ke kelas ini.",
             )

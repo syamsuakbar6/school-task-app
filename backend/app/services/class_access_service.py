@@ -27,8 +27,8 @@ class ClassAccessService:
         allowed = {UserRole.TEACHER.value, UserRole.STUDENT.value, "admin"}
         if normalized not in allowed:
             raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Unsupported user role.",
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Role pengguna tidak didukung.",
             )
         return normalized
 
@@ -80,7 +80,7 @@ class ClassAccessService:
         if not ClassAccessService.class_exists(db, class_id=class_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Class not found.",
+                detail="Kelas tidak ditemukan.",
             )
         if not ClassAccessService.is_teacher_assigned(
             db,
@@ -89,7 +89,7 @@ class ClassAccessService:
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this class.",
+                detail="Kamu tidak memiliki akses ke kelas ini.",
             )
 
     @staticmethod
@@ -97,7 +97,7 @@ class ClassAccessService:
         if not ClassAccessService.class_exists(db, class_id=class_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Class not found.",
+                detail="Kelas tidak ditemukan.",
             )
         if not ClassAccessService.is_student_member(
             db,
@@ -106,7 +106,7 @@ class ClassAccessService:
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You are not a member of this class.",
+                detail="Kamu belum terdaftar di kelas ini.",
             )
 
     @staticmethod
@@ -194,7 +194,7 @@ class ClassAccessService:
         if not ClassAccessService.class_exists(db, class_id=task_class_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Data inconsistency detected for task class_id.",
+                detail="Data kelas pada tugas tidak konsisten.",
             )
         return int(task_class_id)
 
@@ -203,7 +203,7 @@ class ClassAccessService:
         if submission.task is None or submission.class_id != submission.task.class_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Data inconsistency detected for submission class_id.",
+                detail="Data kelas pada pengumpulan tidak konsisten.",
             )
         return int(submission.task.class_id)
 

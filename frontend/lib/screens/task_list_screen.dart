@@ -29,10 +29,16 @@ class TaskListScreen extends StatefulWidget {
   State<TaskListScreen> createState() => _TaskListScreenState();
 }
 
+enum _TaskFilter { active, newTasks, submitted, graded, closed }
+
 class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Task>> _tasksFuture;
   Future<List<Submission>>? _studentSubmissionsFuture;
   Set<int> _hiddenTaskIds = {};
+  final _searchController = TextEditingController();
+  _TaskFilter _taskFilter = _TaskFilter.active;
+  String _searchQuery = '';
+  bool _showHiddenOnly = false;
 
   // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
@@ -44,6 +50,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
     super.initState();
     _tasksFuture = Future.value(const <Task>[]);
     _initLoad();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _initLoad() async {
@@ -105,10 +117,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
       classId: _selectedClassId,
     );
 
-    if (widget.session.user?.isStudent == true && _hiddenTaskIds.isNotEmpty) {
-      tasks = tasks.where((task) => !_hiddenTaskIds.contains(task.id)).toList();
-    }
-
     // Sort: tugas aktif di atas, lalu deadline terdekat.
     tasks.sort((a, b) {
       if (a.isClosed != b.isClosed) {
@@ -146,6 +154,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               'title': t.title,
               'deadline': t.deadline?.toUtc().toIso8601String(),
               'submitted': submittedTaskIds.contains(t.id),
+              'hidden': _hiddenTaskIds.contains(t.id),
             })
         .toList();
 
@@ -205,9 +214,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Hapus dari List'),
+        title: const Text('Sembunyikan tugas'),
         content: Text(
-          'Hapus tugas "${task.title}" dari list kamu? Data tugas dan submission tetap tersimpan.',
+          'Sembunyikan "${task.title}" dari daftar kamu? Data tugas dan pengumpulan tetap tersimpan.',
         ),
         actions: [
           TextButton(
@@ -216,7 +225,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus'),
+            child: const Text('Sembunyikan'),
           ),
         ],
       ),
@@ -224,6 +233,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (confirm != true) return;
 
     _hiddenTaskIds.add(task.id);
+    setState(() {});
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
       _hiddenTasksKey(),
@@ -231,7 +241,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
     await _reloadTasks();
     if (mounted) {
-      AppFeedback.success(context, 'Tugas dihapus dari list.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tugas disembunyikan dari daftar.'),
+          action: SnackBarAction(
+            label: 'Urungkan',
+            onPressed: () => _restoreTask(task),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreTask(Task task) async {
+    _hiddenTaskIds.remove(task.id);
+    setState(() {});
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _hiddenTasksKey(),
+      _hiddenTaskIds.map((id) => id.toString()).toList(),
+    );
+    await _reloadTasks();
+    if (mounted) {
+      AppFeedback.success(context, 'Tugas kembali ditampilkan.');
     }
   }
 
@@ -252,7 +284,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'My Tasks',
+              isTeacher ? 'Tugas Kelas' : 'Daftar Tugas',
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: colorScheme.primary,
               ),
@@ -283,7 +315,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               )
             else
               Text(
-                'Hello, ${user?.name ?? 'Student'}',
+                'Halo, ${user?.name ?? 'Siswa'}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -293,7 +325,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: isDark ? 'Light mode' : 'Dark mode',
+            tooltip: isDark ? 'Mode terang' : 'Mode gelap',
             onPressed: () =>
                 themeModeController.toggleFromBrightness(theme.brightness),
             icon: AnimatedSwitcher(
@@ -309,7 +341,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: 'Muat ulang',
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
           ),
@@ -321,7 +353,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             icon: const Icon(Icons.lock_reset_outlined),
           ),
           IconButton(
-            tooltip: 'Logout',
+            tooltip: 'Keluar',
             onPressed: _logout,
             icon: const Icon(Icons.logout),
           ),
@@ -329,9 +361,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
       floatingActionButton: isTeacher
           ? FloatingActionButton.extended(
-              onPressed: _openCreateTask,
+              onPressed:
+                  _classesLoaded && _classes.isEmpty ? null : _openCreateTask,
               icon: const Icon(Icons.add),
-              label: const Text('Task'),
+              label: const Text('Tugas'),
             )
           : null,
       body: FutureBuilder<List<Task>>(
@@ -349,8 +382,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
           }
 
           final tasks = snapshot.data ?? [];
-          final activeCount = tasks.where((t) => !t.isClosed).length;
-
           if (user?.isStudent == true && _studentSubmissionsFuture != null) {
             return FutureBuilder<List<Submission>>(
               future: _studentSubmissionsFuture,
@@ -358,12 +389,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 final submissions = submissionsSnapshot.data ?? [];
                 return _TaskListBody(
                   tasks: tasks,
-                  activeCount: activeCount,
+                  filter: _taskFilter,
+                  searchQuery: _searchQuery,
+                  showHiddenOnly: _showHiddenOnly,
+                  hiddenTaskIds: _hiddenTaskIds,
+                  hiddenCount: _hiddenTaskIds.length,
+                  emptyTitle: null,
+                  emptyMessage: null,
                   showSubmissionStatus: true,
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
                   onRefresh: _reloadTasks,
                   onOpenTask: _openTaskDetail,
                   onHideTask: _hideTask,
+                  onRestoreTask: _restoreTask,
+                  onFilterChanged: (filter) {
+                    setState(() => _taskFilter = filter);
+                  },
+                  onSearchChanged: (value) {
+                    setState(() => _searchQuery = value);
+                  },
+                  onHiddenToggle: (value) {
+                    setState(() => _showHiddenOnly = value);
+                  },
+                  searchController: _searchController,
                 );
               },
             );
@@ -371,12 +419,29 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
           return _TaskListBody(
             tasks: tasks,
-            activeCount: activeCount,
+            filter: _TaskFilter.active,
+            searchQuery: _searchQuery,
+            showHiddenOnly: false,
+            hiddenTaskIds: const {},
+            hiddenCount: 0,
+            emptyTitle: isTeacher && _classesLoaded && _classes.isEmpty
+                ? 'Belum ada kelas yang ditugaskan'
+                : null,
+            emptyMessage: isTeacher && _classesLoaded && _classes.isEmpty
+                ? 'Minta admin menambahkan akun guru ini ke kelas sebelum membuat atau melihat tugas.'
+                : null,
             showSubmissionStatus: false,
             submissionsByTaskId: const {},
             onRefresh: _reloadTasks,
             onOpenTask: _openTaskDetail,
             onHideTask: null,
+            onRestoreTask: null,
+            onFilterChanged: null,
+            onSearchChanged: (value) {
+              setState(() => _searchQuery = value);
+            },
+            onHiddenToggle: null,
+            searchController: _searchController,
           );
         },
       ),
@@ -448,59 +513,142 @@ class _ClassDropdown extends StatelessWidget {
 class _TaskListBody extends StatelessWidget {
   const _TaskListBody({
     required this.tasks,
-    required this.activeCount,
+    required this.filter,
+    required this.searchQuery,
+    required this.showHiddenOnly,
+    required this.hiddenTaskIds,
+    required this.hiddenCount,
+    required this.emptyTitle,
+    required this.emptyMessage,
     required this.showSubmissionStatus,
     required this.submissionsByTaskId,
     required this.onRefresh,
     required this.onOpenTask,
     required this.onHideTask,
+    required this.onRestoreTask,
+    required this.onFilterChanged,
+    required this.onSearchChanged,
+    required this.onHiddenToggle,
+    required this.searchController,
   });
 
   final List<Task> tasks;
-  final int activeCount;
+  final _TaskFilter filter;
+  final String searchQuery;
+  final bool showHiddenOnly;
+  final Set<int> hiddenTaskIds;
+  final int hiddenCount;
+  final String? emptyTitle;
+  final String? emptyMessage;
   final bool showSubmissionStatus;
   final Map<int, Submission> submissionsByTaskId;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Task task) onOpenTask;
   final Future<void> Function(Task task)? onHideTask;
+  final Future<void> Function(Task task)? onRestoreTask;
+  final ValueChanged<_TaskFilter>? onFilterChanged;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<bool>? onHiddenToggle;
+  final TextEditingController searchController;
 
   @override
   Widget build(BuildContext context) {
+    final query = searchQuery.trim().toLowerCase();
+    final visibleTasks = tasks.where((task) {
+      final hidden = hiddenTaskIds.contains(task.id);
+      if (showSubmissionStatus) {
+        if (showHiddenOnly && !hidden) return false;
+        if (!showHiddenOnly && hidden) return false;
+      }
+
+      if (query.isNotEmpty) {
+        final haystack = '${task.title} ${task.description}'.toLowerCase();
+        if (!haystack.contains(query)) return false;
+      }
+
+      if (!showSubmissionStatus) return true;
+      final submission = submissionsByTaskId[task.id];
+      switch (filter) {
+        case _TaskFilter.active:
+          return !task.isClosed;
+        case _TaskFilter.newTasks:
+          return !task.isClosed && submission == null;
+        case _TaskFilter.submitted:
+          return submission != null && submission.grade == null;
+        case _TaskFilter.graded:
+          return submission?.grade != null;
+        case _TaskFilter.closed:
+          return task.isClosed;
+      }
+    }).toList();
+
+    final activeCount = visibleTasks.where((task) => !task.isClosed).length;
+    final resolvedEmptyTitle = emptyTitle ??
+        (showHiddenOnly
+            ? 'Tidak ada tugas tersembunyi'
+            : query.isNotEmpty
+                ? 'Tugas tidak ditemukan'
+                : _emptyTitleForFilter(filter, showSubmissionStatus));
+    final resolvedEmptyMessage = emptyMessage ??
+        (showHiddenOnly
+            ? 'Tugas yang kamu sembunyikan akan muncul di sini.'
+            : query.isNotEmpty
+                ? 'Coba kata kunci lain atau ubah filter.'
+                : _emptyMessageForFilter(filter, showSubmissionStatus));
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: tasks.isEmpty ? 2 : tasks.length + 1,
+        itemCount: visibleTasks.isEmpty ? 2 : visibleTasks.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 18),
-              child: _TaskSummaryCard(
-                activeCount: activeCount,
-                totalCount: tasks.length,
+              child: Column(
+                children: [
+                  _TaskControls(
+                    isStudent: showSubmissionStatus,
+                    filter: filter,
+                    hiddenCount: hiddenCount,
+                    showHiddenOnly: showHiddenOnly,
+                    searchController: searchController,
+                    onFilterChanged: onFilterChanged,
+                    onSearchChanged: onSearchChanged,
+                    onHiddenToggle: onHiddenToggle,
+                  ),
+                  const SizedBox(height: 14),
+                  _TaskSummaryCard(
+                    activeCount: activeCount,
+                    totalCount: visibleTasks.length,
+                    showSubmissionStatus: showSubmissionStatus,
+                  ),
+                ],
               ),
             );
           }
 
-          if (tasks.isEmpty) {
-            return const SizedBox(
+          if (visibleTasks.isEmpty) {
+            return SizedBox(
               height: 360,
               child: EmptyState(
                 icon: Icons.assignment_outlined,
-                title: 'Belum ada tugas',
-                message: 'Tugas yang diberikan akan muncul di sini.',
+                title: resolvedEmptyTitle,
+                message: resolvedEmptyMessage,
               ),
             );
           }
 
           final taskIndex = index - 1;
-          final task = tasks[taskIndex];
+          final task = visibleTasks[taskIndex];
           final submission = submissionsByTaskId[task.id];
           final showNewBadge =
               showSubmissionStatus && !task.isClosed && submission == null;
+          final isHidden = hiddenTaskIds.contains(task.id);
           final canHide = showSubmissionStatus &&
               onHideTask != null &&
+              !isHidden &&
               (task.isClosed || submission != null);
           return AnimatedContainer(
             key: ValueKey<int>(task.id),
@@ -512,6 +660,9 @@ class _TaskListBody extends StatelessWidget {
               showSubmissionStatus: showSubmissionStatus,
               onTap: () => onOpenTask(task),
               onHide: canHide ? () => onHideTask!(task) : null,
+              onRestore: isHidden && onRestoreTask != null
+                  ? () => onRestoreTask!(task)
+                  : null,
               showNewBadge: showNewBadge,
             ),
           );
@@ -519,18 +670,190 @@ class _TaskListBody extends StatelessWidget {
       ),
     );
   }
+
+  String _emptyTitleForFilter(_TaskFilter filter, bool isStudent) {
+    if (!isStudent) return 'Belum ada tugas';
+    switch (filter) {
+      case _TaskFilter.active:
+        return 'Belum ada tugas aktif';
+      case _TaskFilter.newTasks:
+        return 'Tidak ada tugas baru';
+      case _TaskFilter.submitted:
+        return 'Belum ada tugas terkumpul';
+      case _TaskFilter.graded:
+        return 'Belum ada tugas dinilai';
+      case _TaskFilter.closed:
+        return 'Belum ada tugas ditutup';
+    }
+  }
+
+  String _emptyMessageForFilter(_TaskFilter filter, bool isStudent) {
+    if (!isStudent) return 'Tugas yang dibuat akan muncul di sini.';
+    switch (filter) {
+      case _TaskFilter.active:
+        return 'Tugas aktif dari kelas kamu akan muncul di sini.';
+      case _TaskFilter.newTasks:
+        return 'Semua tugas aktif sudah kamu kumpulkan atau belum ada tugas baru.';
+      case _TaskFilter.submitted:
+        return 'Tugas yang sudah dikumpulkan dan belum dinilai akan muncul di sini.';
+      case _TaskFilter.graded:
+        return 'Nilai dari guru akan muncul setelah pengumpulan diperiksa.';
+      case _TaskFilter.closed:
+        return 'Tugas yang deadlinenya sudah lewat akan muncul di sini.';
+    }
+  }
 }
 
 // ── Summary Card ──────────────────────────────────────────────────────────────
+
+class _TaskControls extends StatelessWidget {
+  const _TaskControls({
+    required this.isStudent,
+    required this.filter,
+    required this.hiddenCount,
+    required this.showHiddenOnly,
+    required this.searchController,
+    required this.onFilterChanged,
+    required this.onSearchChanged,
+    required this.onHiddenToggle,
+  });
+
+  final bool isStudent;
+  final _TaskFilter filter;
+  final int hiddenCount;
+  final bool showHiddenOnly;
+  final TextEditingController searchController;
+  final ValueChanged<_TaskFilter>? onFilterChanged;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<bool>? onHiddenToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: searchController,
+          onChanged: onSearchChanged,
+          decoration: InputDecoration(
+            hintText: 'Cari judul atau deskripsi',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Bersihkan pencarian',
+                    onPressed: () {
+                      searchController.clear();
+                      onSearchChanged('');
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+          ),
+        ),
+        if (isStudent) ...[
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChipButton(
+                  label: 'Aktif',
+                  selected: filter == _TaskFilter.active,
+                  onSelected: () => onFilterChanged?.call(_TaskFilter.active),
+                ),
+                _FilterChipButton(
+                  label: 'Baru',
+                  selected: filter == _TaskFilter.newTasks,
+                  onSelected: () => onFilterChanged?.call(
+                    _TaskFilter.newTasks,
+                  ),
+                ),
+                _FilterChipButton(
+                  label: 'Terkumpul',
+                  selected: filter == _TaskFilter.submitted,
+                  onSelected: () => onFilterChanged?.call(
+                    _TaskFilter.submitted,
+                  ),
+                ),
+                _FilterChipButton(
+                  label: 'Dinilai',
+                  selected: filter == _TaskFilter.graded,
+                  onSelected: () => onFilterChanged?.call(
+                    _TaskFilter.graded,
+                  ),
+                ),
+                _FilterChipButton(
+                  label: 'Ditutup',
+                  selected: filter == _TaskFilter.closed,
+                  onSelected: () => onFilterChanged?.call(_TaskFilter.closed),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  selected: showHiddenOnly,
+                  onSelected: hiddenCount == 0 ? null : onHiddenToggle,
+                  avatar: Icon(
+                    showHiddenOnly
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 18,
+                  ),
+                  label: Text('Tersembunyi ($hiddenCount)'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            showHiddenOnly
+                ? 'Menampilkan tugas yang kamu sembunyikan.'
+                : 'Tugas terkumpul atau ditutup bisa disembunyikan dari daftar.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FilterChipButton extends StatelessWidget {
+  const _FilterChipButton({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+      ),
+    );
+  }
+}
 
 class _TaskSummaryCard extends StatelessWidget {
   const _TaskSummaryCard({
     required this.activeCount,
     required this.totalCount,
+    required this.showSubmissionStatus,
   });
 
   final int activeCount;
   final int totalCount;
+  final bool showSubmissionStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -569,7 +892,9 @@ class _TaskSummaryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$activeCount Tugas Aktif',
+                    showSubmissionStatus
+                        ? '$totalCount Tugas'
+                        : '$activeCount Tugas Aktif',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontSize: 26,
@@ -577,7 +902,9 @@ class _TaskSummaryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$totalCount total tugas • aktif selalu di atas',
+                    showSubmissionStatus
+                        ? '$activeCount masih aktif dari daftar ini'
+                        : '$totalCount tugas ditampilkan, aktif selalu di atas',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: 0.76),
                       fontWeight: FontWeight.w600,

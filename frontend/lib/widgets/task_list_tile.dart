@@ -12,6 +12,7 @@ class TaskListTile extends StatefulWidget {
     this.submission,
     this.showSubmissionStatus = false,
     this.onHide,
+    this.onRestore,
     this.showNewBadge = false,
   });
 
@@ -20,6 +21,7 @@ class TaskListTile extends StatefulWidget {
   final Submission? submission;
   final bool showSubmissionStatus;
   final VoidCallback? onHide;
+  final VoidCallback? onRestore;
   final bool showNewBadge;
 
   @override
@@ -162,9 +164,24 @@ class _TaskListTileState extends State<TaskListTile> {
                               children: [
                                 _TaskStatusChip(task: task),
                                 const SizedBox(height: 8),
-                                if (widget.onHide != null)
+                                if (widget.onRestore != null)
                                   IconButton(
-                                    tooltip: 'Hapus dari list',
+                                    tooltip: 'Tampilkan lagi',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(
+                                      Icons.visibility_outlined,
+                                      size: 20,
+                                      color: colorScheme.primary,
+                                    ),
+                                    onPressed: widget.onRestore,
+                                  )
+                                else if (widget.onHide != null)
+                                  IconButton(
+                                    tooltip: 'Sembunyikan dari daftar',
                                     constraints: const BoxConstraints(
                                       minWidth: 36,
                                       minHeight: 36,

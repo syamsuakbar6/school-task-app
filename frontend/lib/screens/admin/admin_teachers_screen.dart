@@ -18,6 +18,8 @@ class AdminTeachersScreen extends StatefulWidget {
 
 class _AdminTeachersScreenState extends State<AdminTeachersScreen> {
   late Future<List<Map<String, dynamic>>> _teachersFuture;
+  final _searchController = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
@@ -30,6 +32,12 @@ class _AdminTeachersScreenState extends State<AdminTeachersScreen> {
   }
 
   void _refresh() => setState(_load);
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _showAddTeacherDialog() async {
     final nipController = TextEditingController();
@@ -232,48 +240,84 @@ class _AdminTeachersScreenState extends State<AdminTeachersScreen> {
 
           final teachers = (snapshot.data ?? [])
               .where((user) => user['role'] == 'teacher')
+              .where((teacher) {
+                final query = _query.trim().toLowerCase();
+                if (query.isEmpty) return true;
+                final name = (teacher['name'] as String? ?? '').toLowerCase();
+                final nip = (teacher['nip'] as String? ?? '').toLowerCase();
+                return name.contains(query) || nip.contains(query);
+              })
               .toList();
 
           if (teachers.isEmpty) {
-            return const EmptyState(
-              icon: Icons.school_outlined,
-              title: 'Belum ada guru',
-              message: 'Tap tombol di bawah untuk menambah guru baru.',
+            return Column(
+              children: [
+                _AdminSearchField(
+                  controller: _searchController,
+                  hintText: 'Cari nama atau NIP',
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+                Expanded(
+                  child: EmptyState(
+                    icon: Icons.school_outlined,
+                    title: _query.trim().isEmpty
+                        ? 'Belum ada guru'
+                        : 'Guru tidak ditemukan',
+                    message: _query.trim().isEmpty
+                        ? 'Ketuk tombol di bawah untuk menambah guru baru.'
+                        : 'Coba kata kunci lain.',
+                  ),
+                ),
+              ],
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-            itemCount: teachers.length,
-            itemBuilder: (context, index) {
-              final teacher = teachers[index];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: colorScheme.secondaryContainer,
-                    child: Text(
-                      _initials(teacher['name'] as String),
-                      style: TextStyle(
-                        color: colorScheme.secondary,
-                        fontWeight: FontWeight.w700,
+          return Column(
+            children: [
+              _AdminSearchField(
+                controller: _searchController,
+                hintText: 'Cari nama atau NIP',
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  itemCount: teachers.length,
+                  itemBuilder: (context, index) {
+                    final teacher = teachers[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: colorScheme.secondaryContainer,
+                          child: Text(
+                            _initials(teacher['name'] as String),
+                            style: TextStyle(
+                              color: colorScheme.secondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          teacher['name'] as String,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text('NIP: ${teacher['nip'] ?? '-'}'),
+                        trailing: IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            color: colorScheme.error,
+                          ),
+                          onPressed: () => _deleteTeacher(teacher),
+                        ),
                       ),
-                    ),
-                  ),
-                  title: Text(
-                    teacher['name'] as String,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Text('NIP: ${teacher['nip'] ?? '-'}'),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete_outline, color: colorScheme.error),
-                    onPressed: () => _deleteTeacher(teacher),
-                  ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ],
           );
         },
       ),
@@ -284,5 +328,42 @@ class _AdminTeachersScreenState extends State<AdminTeachersScreen> {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty) return '?';
     return parts.take(2).map((part) => part[0].toUpperCase()).join();
+  }
+}
+
+class _AdminSearchField extends StatelessWidget {
+  const _AdminSearchField({
+    required this.controller,
+    required this.hintText,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          hintText: hintText,
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Bersihkan pencarian',
+                  onPressed: () {
+                    controller.clear();
+                    onChanged('');
+                  },
+                  icon: const Icon(Icons.close),
+                ),
+        ),
+      ),
+    );
   }
 }

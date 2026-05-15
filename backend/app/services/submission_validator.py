@@ -17,7 +17,7 @@ class SubmissionValidator:
         if grade < 0 or grade > 100:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="grade must be between 0 and 100.",
+                detail="Nilai harus berada di antara 0 dan 100.",
             )
 
     @staticmethod
@@ -27,7 +27,7 @@ class SubmissionValidator:
         if normalized not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"status must be one of: {', '.join(sorted(allowed))}.",
+                detail=f"Status harus salah satu dari: {', '.join(sorted(allowed))}.",
             )
         return normalized
 

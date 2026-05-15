@@ -111,13 +111,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   Future<void> _saveDownloadedFile(DownloadedSubmissionFile file) async {
     final savedPath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save submission file',
+      dialogTitle: 'Simpan file pengumpulan',
       fileName: file.fileName,
       bytes: file.bytes,
     );
     if (!mounted) return;
     if (savedPath == null) {
-      AppFeedback.error(context, 'Download dibatalkan.');
+      AppFeedback.error(context, 'Unduhan dibatalkan.');
     } else {
       AppFeedback.success(context, 'File berhasil disimpan.');
     }
@@ -133,7 +133,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           future: _taskFuture,
           builder: (context, snapshot) {
             return Text(
-              snapshot.data?.title ?? 'Task detail',
+              snapshot.data?.title ?? 'Detail tugas',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             );
@@ -141,7 +141,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: 'Muat ulang',
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
           ),
@@ -186,13 +186,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Description',
+                        'Deskripsi',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 10),
                       Text(
                         task.description.isEmpty
-                            ? 'No description.'
+                            ? 'Tidak ada deskripsi.'
                             : task.description,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               color: Theme.of(context)
@@ -285,8 +285,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             height: 220,
                             child: EmptyState(
                               icon: Icons.inbox_outlined,
-                              title: 'No submissions',
-                              message: 'Student submissions will appear here.',
+                              title: 'Belum ada pengumpulan',
+                              message:
+                                  'Pengumpulan siswa akan muncul di sini.',
                             ),
                           ),
                         ],
@@ -520,7 +521,7 @@ class _SubmissionFilePreviewDialog extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Preview is not available for this file type.',
+                    'Pratinjau tidak tersedia untuk tipe file ini.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium,
                   ),
@@ -537,12 +538,12 @@ class _SubmissionFilePreviewDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: const Text('Tutup'),
         ),
         FilledButton.icon(
           onPressed: onDownload,
           icon: const Icon(Icons.download_outlined),
-          label: const Text('Download'),
+          label: const Text('Unduh'),
         ),
       ],
     );
@@ -629,7 +630,7 @@ class _SubmissionsHeader extends StatelessWidget {
     return Row(
       children: [
         Text(
-          'Submissions',
+          'Pengumpulan',
           style: theme.textTheme.titleLarge,
         ),
         const SizedBox(width: 10),

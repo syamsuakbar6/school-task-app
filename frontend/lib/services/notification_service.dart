@@ -1,21 +1,16 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/material.dart';
-/// Key untuk menyimpan daftar task di SharedPreferences
-/// supaya background service bisa baca tanpa harus hit API.
-const _kTasksCacheKey = 'cached_tasks_for_notification';
 
-/// Berapa jam sebelum deadline kita kirim notifikasi.
+const _kTasksCacheKey = 'cached_tasks_for_notification';
 const _kDeadlineWarningHours = 24;
 
 class NotificationService {
   NotificationService._();
 
   static final _plugin = FlutterLocalNotificationsPlugin();
-
-  // ── Init ─────────────────────────────────────────────────────────────────
 
   static Future<void> init() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -26,7 +21,6 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // Minta permission notifikasi (Android 13+)
     await _plugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
@@ -37,22 +31,18 @@ class NotificationService {
 
   static void _onNotificationTap(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
-    // Bisa tambah navigasi ke task detail di sini kalau mau nanti
   }
 
-  // ── Show Notifications ────────────────────────────────────────────────────
-
-  /// Tampilkan notifikasi sukses submit tugas — dipanggil dari UI.
   static Future<void> showSubmitSuccess(String taskTitle) async {
     await _plugin.show(
       1001,
-      '✅ Tugas Berhasil Dikirim!',
-      'Kamu sudah submit "$taskTitle". Tunggu penilaian dari guru.',
+      'Tugas berhasil dikirim',
+      'Kamu sudah mengumpulkan "$taskTitle". Tunggu penilaian dari guru.',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'submit_channel',
-          'Submit Tugas',
-          channelDescription: 'Notifikasi konfirmasi submit tugas',
+          'Pengumpulan Tugas',
+          channelDescription: 'Notifikasi konfirmasi pengumpulan tugas',
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
@@ -61,16 +51,15 @@ class NotificationService {
     );
   }
 
-  /// Tampilkan notifikasi deadline — dipanggil dari background task.
   static Future<void> showDeadlineWarning({
     required int taskId,
     required String taskTitle,
     required String deadlineText,
   }) async {
     await _plugin.show(
-      taskId, // pakai task ID supaya tidak duplikat
-      '⏰ Deadline Mendekat!',
-      '"$taskTitle" — batas waktu: $deadlineText',
+      taskId,
+      'Deadline mendekat',
+      '"$taskTitle" batas waktu: $deadlineText',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'deadline_channel',
@@ -86,17 +75,12 @@ class NotificationService {
     );
   }
 
-  // ── Cache Tasks ───────────────────────────────────────────────────────────
-
-  /// Simpan daftar task ke SharedPreferences setelah fetch dari API.
-  /// Format: list of {id, title, deadline (ISO string), submitted}
   static Future<void> cacheTasks(List<Map<String, dynamic>> tasks) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kTasksCacheKey, jsonEncode(tasks));
     debugPrint('NotificationService: cached ${tasks.length} tasks');
   }
 
-  /// Baca task dari cache (dipakai oleh background service).
   static Future<List<Map<String, dynamic>>> getCachedTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_kTasksCacheKey);
@@ -109,11 +93,6 @@ class NotificationService {
     }
   }
 
-  // ── Check Deadlines ───────────────────────────────────────────────────────
-
-  /// Cek task mana yang deadlinenya < 24 jam dan belum disubmit,
-  /// lalu kirim notifikasi untuk masing-masing.
-  /// Dipanggil dari background isolate (workmanager) ATAU saat app dibuka.
   static Future<void> checkAndNotifyDeadlines() async {
     final tasks = await getCachedTasks();
     if (tasks.isEmpty) {
@@ -126,37 +105,38 @@ class NotificationService {
       const Duration(hours: _kDeadlineWarningHours),
     );
 
-    int notifCount = 0;
+    var notifCount = 0;
 
     for (final task in tasks) {
       final deadlineStr = task['deadline'] as String?;
       final submitted = task['submitted'] as bool? ?? false;
+      final hidden = task['hidden'] as bool? ?? false;
       final taskId = task['id'] as int?;
       final taskTitle = task['title'] as String? ?? 'Tugas';
 
-      if (deadlineStr == null || submitted || taskId == null) continue;
+      if (deadlineStr == null || submitted || hidden || taskId == null) {
+        await _plugin.cancel(taskId ?? 0);
+        continue;
+      }
 
       final deadline = DateTime.tryParse(deadlineStr)?.toUtc();
       if (deadline == null) continue;
 
-      // Sudah lewat deadline → skip
-      if (deadline.isBefore(now)) continue;
-
-      // Deadline masih > 24 jam → skip
+      if (deadline.isBefore(now)) {
+        await _plugin.cancel(taskId);
+        continue;
+      }
       if (deadline.isAfter(warningThreshold)) continue;
 
-      // Dalam rentang 0–24 jam → kirim notifikasi
-      final hoursLeft = deadline.difference(now).inHours;
-      final minutesLeft = deadline.difference(now).inMinutes % 60;
+      final difference = deadline.difference(now);
+      final hoursLeft = difference.inHours;
+      final minutesLeft = difference.inMinutes % 60;
 
-      String deadlineText;
-      if (hoursLeft == 0) {
-        deadlineText = '$minutesLeft menit lagi!';
-      } else if (minutesLeft == 0) {
-        deadlineText = '$hoursLeft jam lagi';
-      } else {
-        deadlineText = '$hoursLeft jam $minutesLeft menit lagi';
-      }
+      final deadlineText = hoursLeft == 0
+          ? '$minutesLeft menit lagi'
+          : minutesLeft == 0
+              ? '$hoursLeft jam lagi'
+              : '$hoursLeft jam $minutesLeft menit lagi';
 
       await showDeadlineWarning(
         taskId: taskId,

@@ -33,10 +33,17 @@ class Submission {
   final AppUser user;
 
   String get statusLabel {
-    if (grade != null) return 'Graded: $grade';
+    if (grade != null) return 'Dinilai: $grade';
     final normalized = status?.trim();
-    if (normalized == null || normalized.isEmpty) return 'Submitted';
-    return normalized[0].toUpperCase() + normalized.substring(1);
+    if (normalized == null || normalized.isEmpty) return 'Terkumpul';
+    switch (normalized.toLowerCase()) {
+      case 'submitted':
+        return 'Terkumpul';
+      case 'graded':
+        return 'Dinilai';
+      default:
+        return normalized[0].toUpperCase() + normalized.substring(1);
+    }
   }
 
   bool get isImageFile {
