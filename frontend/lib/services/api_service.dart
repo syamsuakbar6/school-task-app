@@ -235,6 +235,94 @@ class ApiService {
     );
     return Submission.fromJson(_decodeObject(response));
   }
+  Future<List<Map<String, dynamic>>> adminListUsers() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/admin/users'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<List<Map<String, dynamic>>> adminListStudents() async {
+    final users = await adminListUsers();
+    return users.where((u) => u['role'] == 'student').toList();
+  }
+
+  Future<Map<String, dynamic>> adminCreateStudent({
+    required String nisn,
+    required String name,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/students'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({'nisn': nisn, 'name': name}),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<void> adminDeleteUser(int userId) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/admin/users/$userId'),
+      headers: _headers,
+    );
+    if (response.statusCode != 204) {
+      _decode(response);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> adminListClasses() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/admin/classes'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<Map<String, dynamic>> adminCreateClass({
+    required String name,
+    required String code,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/classes'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'code': code}),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<void> adminDeleteClass(int classId) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/admin/classes/$classId'),
+      headers: _headers,
+    );
+    if (response.statusCode != 204) {
+      _decode(response);
+    }
+  }
+
+  Future<void> adminAssignStudentToClass({
+    required int classId,
+    required int studentId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/classes/$classId/students/$studentId'),
+      headers: _headers,
+    );
+    _decodeObject(response);
+  }
+
+  Future<void> adminRemoveStudentFromClass({
+    required int classId,
+    required int studentId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/admin/classes/$classId/students/$studentId'),
+      headers: _headers,
+    );
+    if (response.statusCode != 204) {
+      _decode(response);
+    }
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 

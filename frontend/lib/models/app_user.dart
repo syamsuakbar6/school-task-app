@@ -1,9 +1,14 @@
 enum UserRole {
   student,
-  teacher;
+  teacher,
+  admin;
 
   static UserRole fromJson(String value) {
-    return value.toLowerCase() == 'teacher' ? teacher : student;
+    return switch (value.toLowerCase().trim()) {
+      'teacher' => teacher,
+      'admin' => admin,
+      _ => student,
+    };
   }
 }
 
@@ -26,8 +31,9 @@ class AppUser {
 
   bool get isTeacher => role == UserRole.teacher;
   bool get isStudent => role == UserRole.student;
+  bool get isAdmin => role == UserRole.admin;
 
-  /// Identifier yang dipakai login — NISN untuk siswa, NIP untuk guru
+  /// Identifier yang dipakai login — NISN untuk siswa, NIP untuk guru/admin
   String get identifier => isStudent ? (nisn ?? '') : (nip ?? '');
 
   factory AppUser.fromJson(Map<String, dynamic> json) {

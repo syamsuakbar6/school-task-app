@@ -1,0 +1,25 @@
+// Di main.dart, ganti bagian FutureBuilder home: dengan ini:
+
+home: FutureBuilder<bool>(
+  future: _restoreSessionFuture,
+  builder: (context, snapshot) {
+    if (snapshot.connectionState != ConnectionState.done) {
+      return const _SessionRestoreScreen();
+    }
+
+    if (snapshot.data == true) {
+      // Routing berdasarkan role
+      final role = session.user?.role;
+      if (role == UserRole.admin) {
+        return AdminDashboardScreen(session: session);
+      }
+      return TaskListScreen(session: session);
+    }
+
+    return LoginScreen(session: session);
+  },
+),
+
+// TAMBAHKAN import ini di bagian atas main.dart:
+// import 'models/app_user.dart';
+// import 'screens/admin_dashboard_screen.dart';

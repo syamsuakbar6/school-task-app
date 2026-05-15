@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'screens/admin_dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/task_list_screen.dart';
 import 'services/api_service.dart';
@@ -38,7 +39,7 @@ Future<void> main() async {
   // Init workmanager untuk background task
   await Workmanager().initialize(
     callbackDispatcher,
-    isInDebugMode: false, // set true kalau mau lihat log workmanager
+    isInDebugMode: false,
   );
 
   // Daftarkan background task: cek deadline setiap 1 jam
@@ -95,6 +96,10 @@ class _SchoolTaskAppState extends State<SchoolTaskApp> {
                 }
 
                 if (snapshot.data == true) {
+                  // Routing berdasarkan role
+                  if (session.user?.isAdmin == true) {
+                    return AdminDashboardScreen(session: session);
+                  }
                   return TaskListScreen(session: session);
                 }
 

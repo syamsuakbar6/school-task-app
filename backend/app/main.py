@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
 from app.db.database import check_database_connection, get_db
-from app.routers import auth, class_router, submission, task
+from app.routers import auth, class_router, submission, task, admin
 
 # TAMBAHKAN INI — pastikan semua model ter-register ke SQLAlchemy
 # sebelum query pertama dijalankan
@@ -48,6 +48,7 @@ app.include_router(auth.router)
 app.include_router(class_router.router)
 app.include_router(task.router)
 app.include_router(submission.router)
+app.include_router(admin.router)
 
 
 @app.get("/", tags=["Root"])
