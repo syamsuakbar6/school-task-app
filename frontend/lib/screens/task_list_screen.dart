@@ -10,6 +10,7 @@ import '../widgets/app_page_route.dart';
 import '../widgets/app_error_view.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/task_list_tile.dart';
+import 'change_password_screen.dart';
 import 'create_task_screen.dart';
 import 'login_screen.dart';
 import 'task_detail_screen.dart';
@@ -303,6 +304,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
             tooltip: 'Refresh',
             onPressed: _refresh,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'Ganti password',
+            onPressed: () => Navigator.of(context).push(
+              appPageRoute(ChangePasswordScreen(session: widget.session)),
+            ),
+            icon: const Icon(Icons.lock_reset_outlined),
           ),
           IconButton(
             tooltip: 'Logout',

@@ -7,6 +7,7 @@ import 'admin/admin_classes_screen.dart';
 import 'admin/admin_students_screen.dart';
 import 'admin/admin_teachers_screen.dart';
 import 'admin/admin_users_screen.dart';
+import 'change_password_screen.dart';
 import 'login_screen.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
@@ -99,6 +100,13 @@ class AdminDashboardScreen extends StatelessWidget {
             icon: Icon(
               isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
             ),
+          ),
+          IconButton(
+            tooltip: 'Ganti password',
+            onPressed: () => Navigator.of(context).push(
+              appPageRoute(ChangePasswordScreen(session: session)),
+            ),
+            icon: const Icon(Icons.lock_reset_outlined),
           ),
           IconButton(
             tooltip: 'Logout',

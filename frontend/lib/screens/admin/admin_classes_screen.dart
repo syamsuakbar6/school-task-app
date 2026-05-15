@@ -230,65 +230,103 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
               final students = cls['students'] as List? ?? [];
               final teachers = cls['teachers'] as List? ?? [];
               return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.class_outlined,
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                  title: Text(
-                    cls['name'] as String,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Kode: ${cls['code'] ?? '-'} | ${students.length} siswa | ${teachers.length} guru',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        tooltip: 'Assign siswa',
-                        icon: Icon(
-                          Icons.person_add_outlined,
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.class_outlined,
                           color: colorScheme.primary,
                         ),
-                        onPressed: () => Navigator.of(context).push(
-                          appPageRoute(AdminAssignScreen(
-                            session: widget.session,
-                            classData: cls,
-                          )),
-                        ).then((_) => _refresh()),
                       ),
-                      IconButton(
-                        tooltip: 'Assign guru',
-                        icon: Icon(
-                          Icons.school_outlined,
-                          color: colorScheme.secondary,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              cls['name'] as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Kode: ${cls['code'] ?? '-'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                _CountChip(
+                                  icon: Icons.people_outline,
+                                  label: '${students.length} siswa',
+                                ),
+                                _CountChip(
+                                  icon: Icons.school_outlined,
+                                  label: '${teachers.length} guru',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Assign siswa',
+                                  icon: Icon(
+                                    Icons.person_add_outlined,
+                                    color: colorScheme.primary,
+                                  ),
+                                  onPressed: () => Navigator.of(context).push(
+                                    appPageRoute(AdminAssignScreen(
+                                      session: widget.session,
+                                      classData: cls,
+                                    )),
+                                  ).then((_) => _refresh()),
+                                ),
+                                IconButton(
+                                  tooltip: 'Assign guru',
+                                  icon: Icon(
+                                    Icons.school_outlined,
+                                    color: colorScheme.secondary,
+                                  ),
+                                  onPressed: () => Navigator.of(context).push(
+                                    appPageRoute(AdminAssignTeachersScreen(
+                                      session: widget.session,
+                                      classData: cls,
+                                    )),
+                                  ).then((_) => _refresh()),
+                                ),
+                                IconButton(
+                                  tooltip: 'Hapus kelas',
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: colorScheme.error,
+                                  ),
+                                  onPressed: () => _deleteClass(cls),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        onPressed: () => Navigator.of(context).push(
-                          appPageRoute(AdminAssignTeachersScreen(
-                            session: widget.session,
-                            classData: cls,
-                          )),
-                        ).then((_) => _refresh()),
-                      ),
-                      IconButton(
-                        tooltip: 'Hapus kelas',
-                        icon: Icon(
-                          Icons.delete_outline,
-                          color: colorScheme.error,
-                        ),
-                        onPressed: () => _deleteClass(cls),
                       ),
                     ],
                   ),
@@ -297,6 +335,46 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

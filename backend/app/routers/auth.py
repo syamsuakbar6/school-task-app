@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, status
 
 from app.core.dependencies import DBSession, get_current_user
 from app.schemas.auth_schema import TokenResponse
-from app.schemas.user_schema import UserCreate, UserLogin, UserResponse
+from app.schemas.user_schema import (
+    PasswordChangeRequest,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 from app.services.auth_service import AuthService
 
 
@@ -32,3 +37,17 @@ def login(credentials: UserLogin, db: DBSession) -> TokenResponse:
 @router.get("/me", response_model=UserResponse)
 def read_current_user(current_user=Depends(get_current_user)) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: PasswordChangeRequest,
+    db: DBSession,
+    current_user=Depends(get_current_user),
+) -> None:
+    AuthService.change_password(
+        db,
+        user=current_user,
+        old_password=payload.old_password,
+        new_password=payload.new_password,
+    )

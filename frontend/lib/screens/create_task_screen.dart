@@ -20,18 +20,32 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _classIdController = TextEditingController(text: '1');
 
   DateTime? _deadline;
+  late Future<List<Map<String, dynamic>>> _classesFuture;
+  int? _selectedClassId;
   bool _isSaving = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _classesFuture = _loadClasses();
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _classIdController.dispose();
     super.dispose();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadClasses() async {
+    final classes = await widget.session.api.fetchClasses();
+    if (_selectedClassId == null && classes.isNotEmpty) {
+      _selectedClassId = classes.first['id'] as int;
+    }
+    return classes;
   }
 
   Future<void> _pickDeadline() async {
@@ -63,6 +77,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    final classId = _selectedClassId;
+    if (classId == null) {
+      setState(() => _errorMessage = 'Pilih kelas terlebih dahulu.');
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -74,7 +93,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         deadline: _deadline,
-        classId: int.parse(_classIdController.text.trim()),
+        classId: classId,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -95,7 +114,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Create Task',
+          'Buat Tugas',
           style: theme.textTheme.headlineSmall?.copyWith(
             color: colorScheme.primary,
           ),
@@ -113,12 +132,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(
-                labelText: 'Title',
+                labelText: 'Judul',
                 prefixIcon: Icon(Icons.title_outlined),
               ),
               validator: (value) {
                 if ((value ?? '').trim().length < 3) {
-                  return 'Title must be at least 3 characters';
+                  return 'Judul minimal 3 karakter';
                 }
                 return null;
               },
@@ -128,22 +147,59 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               controller: _descriptionController,
               maxLines: 5,
               decoration: const InputDecoration(
-                labelText: 'Description',
+                labelText: 'Deskripsi',
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _classIdController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Class ID',
-                prefixIcon: Icon(Icons.groups_outlined),
-              ),
-              validator: (value) {
-                final id = int.tryParse((value ?? '').trim());
-                if (id == null || id < 1) return 'Enter a valid class ID';
-                return null;
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _classesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const _ClassLoadingField();
+                }
+                if (snapshot.hasError) {
+                  return _ClassErrorField(
+                    message: snapshot.error.toString(),
+                    onRetry: () => setState(() {
+                      _classesFuture = _loadClasses();
+                    }),
+                  );
+                }
+
+                final classes = snapshot.data ?? [];
+                if (classes.isEmpty) {
+                  return const _ClassErrorField(
+                    message: 'Belum ada kelas yang ditugaskan ke akun guru ini.',
+                  );
+                }
+
+                return DropdownButtonFormField<int>(
+                  value: _selectedClassId,
+                  decoration: const InputDecoration(
+                    labelText: 'Kelas',
+                    prefixIcon: Icon(Icons.groups_outlined),
+                  ),
+                  items: classes.map((classData) {
+                    final id = classData['id'] as int;
+                    final name = classData['name'] as String? ?? 'Kelas $id';
+                    final code = classData['code'] as String? ?? '-';
+                    return DropdownMenuItem<int>(
+                      value: id,
+                      child: Text(
+                        '$name ($code)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: _isSaving
+                      ? null
+                      : (value) => setState(() => _selectedClassId = value),
+                  validator: (value) {
+                    if (value == null) return 'Pilih kelas';
+                    return null;
+                  },
+                );
               },
             ),
             const SizedBox(height: 16),
@@ -153,7 +209,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
             ),
             const SizedBox(height: 24),
             GradientActionButton(
-              label: 'Create task',
+              label: 'Buat tugas',
               icon: Icons.save_outlined,
               onPressed: _isSaving ? null : _save,
               isLoading: _isSaving,
@@ -181,7 +237,7 @@ class _DeadlinePickerCard extends StatelessWidget {
     final hasDeadline = deadline != null;
     final text = hasDeadline
         ? DateFormat('EEE, d MMM yyyy HH:mm').format(deadline!.toLocal())
-        : 'Tap to set deadline';
+        : 'Tap untuk mengatur deadline';
 
     return Card(
       color: hasDeadline
@@ -237,6 +293,62 @@ class _DeadlinePickerCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ClassLoadingField extends StatelessWidget {
+  const _ClassLoadingField();
+
+  @override
+  Widget build(BuildContext context) {
+    return const InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Kelas',
+        prefixIcon: Icon(Icons.groups_outlined),
+      ),
+      child: LinearProgressIndicator(),
+    );
+  }
+}
+
+class _ClassErrorField extends StatelessWidget {
+  const _ClassErrorField({
+    required this.message,
+    this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.errorContainer.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: colorScheme.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colorScheme.onErrorContainer),
+            ),
+          ),
+          if (onRetry != null)
+            IconButton(
+              tooltip: 'Coba lagi',
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+            ),
+        ],
       ),
     );
   }

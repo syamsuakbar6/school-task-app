@@ -80,6 +80,23 @@ class ApiService {
 
   // ── Classes ──────────────────────────────────────────────────────────────
 
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final response = await _client.put(
+      Uri.parse('$baseUrl/me/password'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      }),
+    );
+    if (response.statusCode != 204) {
+      _decode(response);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchClasses() async {
     final response = await _client.get(
       Uri.parse('$baseUrl/classes'),

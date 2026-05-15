@@ -83,6 +83,29 @@ class AuthService:
         return user
 
     @staticmethod
+    def change_password(
+        db: Session,
+        *,
+        user: User,
+        old_password: str,
+        new_password: str,
+    ) -> None:
+        if not verify_password(old_password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password lama salah.",
+            )
+        if old_password == new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password baru harus berbeda dari password lama.",
+            )
+
+        user.password = hash_password(new_password)
+        db.add(user)
+        db.commit()
+
+    @staticmethod
     def build_login_response(user: User) -> dict[str, str]:
         access_token = create_access_token(
             data={
