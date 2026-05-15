@@ -4,6 +4,7 @@ import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
 import '../../widgets/empty_state.dart';
 import 'admin_assign_screen.dart';
+import 'admin_assign_teachers_screen.dart';
 import '../../widgets/app_page_route.dart';
 
 class AdminClassesScreen extends StatefulWidget {
@@ -143,7 +144,9 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Kelas'),
-        content: Text('Hapus kelas ${cls['name']}? Semua siswa akan dikeluarkan dari kelas ini.'),
+        content: Text(
+          'Hapus kelas ${cls['name']}? Semua siswa akan dikeluarkan dari kelas ini.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -203,7 +206,10 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return AppErrorView(message: snapshot.error.toString(), onRetry: _refresh);
+            return AppErrorView(
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
           }
 
           final classes = snapshot.data ?? [];
@@ -222,6 +228,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
             itemBuilder: (context, index) {
               final cls = classes[index];
               final students = cls['students'] as List? ?? [];
+              final teachers = cls['teachers'] as List? ?? [];
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
@@ -232,7 +239,10 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                       color: colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(Icons.class_outlined, color: colorScheme.primary),
+                    child: Icon(
+                      Icons.class_outlined,
+                      color: colorScheme.primary,
+                    ),
                   ),
                   title: Text(
                     cls['name'] as String,
@@ -241,14 +251,17 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    'Kode: ${cls['code'] ?? '-'} · ${students.length} siswa',
+                    'Kode: ${cls['code'] ?? '-'} | ${students.length} siswa | ${teachers.length} guru',
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         tooltip: 'Assign siswa',
-                        icon: Icon(Icons.person_add_outlined, color: colorScheme.primary),
+                        icon: Icon(
+                          Icons.person_add_outlined,
+                          color: colorScheme.primary,
+                        ),
                         onPressed: () => Navigator.of(context).push(
                           appPageRoute(AdminAssignScreen(
                             session: widget.session,
@@ -257,8 +270,24 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         ).then((_) => _refresh()),
                       ),
                       IconButton(
+                        tooltip: 'Assign guru',
+                        icon: Icon(
+                          Icons.school_outlined,
+                          color: colorScheme.secondary,
+                        ),
+                        onPressed: () => Navigator.of(context).push(
+                          appPageRoute(AdminAssignTeachersScreen(
+                            session: widget.session,
+                            classData: cls,
+                          )),
+                        ).then((_) => _refresh()),
+                      ),
+                      IconButton(
                         tooltip: 'Hapus kelas',
-                        icon: Icon(Icons.delete_outline, color: colorScheme.error),
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: colorScheme.error,
+                        ),
                         onPressed: () => _deleteClass(cls),
                       ),
                     ],

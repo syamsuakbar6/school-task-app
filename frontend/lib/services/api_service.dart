@@ -235,6 +235,7 @@ class ApiService {
     );
     return Submission.fromJson(_decodeObject(response));
   }
+
   Future<List<Map<String, dynamic>>> adminListUsers() async {
     final response = await _client.get(
       Uri.parse('$baseUrl/admin/users'),
@@ -246,6 +247,11 @@ class ApiService {
   Future<List<Map<String, dynamic>>> adminListStudents() async {
     final users = await adminListUsers();
     return users.where((u) => u['role'] == 'student').toList();
+  }
+
+  Future<List<Map<String, dynamic>>> adminListTeachers() async {
+    final users = await adminListUsers();
+    return users.where((u) => u['role'] == 'teacher').toList();
   }
 
   Future<Map<String, dynamic>> adminCreateStudent({
@@ -317,6 +323,38 @@ class ApiService {
   }) async {
     final response = await _client.delete(
       Uri.parse('$baseUrl/admin/classes/$classId/students/$studentId'),
+      headers: _headers,
+    );
+    if (response.statusCode != 204) {
+      _decode(response);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> adminListClassTeachers(int classId) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/admin/classes/$classId/teachers'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<void> adminAssignTeacherToClass({
+    required int classId,
+    required int teacherId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/classes/$classId/teachers/$teacherId'),
+      headers: _headers,
+    );
+    _decodeObject(response);
+  }
+
+  Future<void> adminRemoveTeacherFromClass({
+    required int classId,
+    required int teacherId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/admin/classes/$classId/teachers/$teacherId'),
       headers: _headers,
     );
     if (response.statusCode != 204) {

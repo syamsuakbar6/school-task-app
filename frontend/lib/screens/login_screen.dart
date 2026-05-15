@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../services/api_exception.dart';
 import '../services/auth_session.dart';
 import '../widgets/app_page_route.dart';
+import 'admin_dashboard_screen.dart';
 import 'task_list_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -57,8 +58,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
+      final destination = widget.session.user?.isAdmin == true
+          ? AdminDashboardScreen(session: widget.session)
+          : TaskListScreen(session: widget.session);
       Navigator.of(context).pushReplacement(
-        appPageRoute(TaskListScreen(session: widget.session)),
+        appPageRoute(destination),
       );
     } on ApiException catch (error) {
       setState(() => _errorMessage = error.message);

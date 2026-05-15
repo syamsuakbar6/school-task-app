@@ -46,6 +46,16 @@ class StudentResponse(BaseModel):
         from_attributes = True
 
 
+class TeacherResponse(BaseModel):
+    id: int
+    name: str
+    nip: str | None
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
 class ClassResponse(BaseModel):
     id: int
     name: str
@@ -60,7 +70,8 @@ class ClassWithStudentsResponse(BaseModel):
     id: int
     name: str
     code: str | None
-    students: list[StudentResponse] = []
+    students: list[StudentResponse] = Field(default_factory=list)
+    teachers: list[TeacherResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -123,8 +134,9 @@ def delete_user(
             detail="User tidak ditemukan.",
         )
 
-    # Hapus membership dulu sebelum hapus user
+    # Hapus relasi kelas dulu sebelum hapus user
     db.execute(delete(ClassMembership).where(ClassMembership.student_id == user_id))
+    db.execute(delete(TeacherClassAssignment).where(TeacherClassAssignment.teacher_id == user_id))
     db.delete(user)
     db.commit()
 
@@ -148,11 +160,21 @@ def list_all_classes(
             students = db.scalars(
                 select(User).where(User.id.in_(student_ids))
             ).all()
+        assignments = db.scalars(
+            select(TeacherClassAssignment).where(TeacherClassAssignment.class_id == c.id)
+        ).all()
+        teacher_ids = [a.teacher_id for a in assignments]
+        teachers = []
+        if teacher_ids:
+            teachers = db.scalars(
+                select(User).where(User.id.in_(teacher_ids))
+            ).all()
         result.append(ClassWithStudentsResponse(
             id=c.id,
             name=c.name,
             code=c.code,
             students=[StudentResponse.model_validate(s) for s in students],
+            teachers=[TeacherResponse.model_validate(t) for t in teachers],
         ))
     return result
 
@@ -194,6 +216,7 @@ def delete_class(
             detail="Kelas tidak ditemukan.",
         )
     db.execute(delete(ClassMembership).where(ClassMembership.class_id == class_id))
+    db.execute(delete(TeacherClassAssignment).where(TeacherClassAssignment.class_id == class_id))
     db.delete(cls)
     db.commit()
 
@@ -274,4 +297,85 @@ def remove_student_from_class(
             detail="Siswa tidak terdaftar di kelas ini.",
         )
     db.delete(membership)
+    db.commit()
+
+
+@router.get("/classes/{class_id}/teachers", response_model=list[TeacherResponse])
+def list_teachers_in_class(
+    class_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> list[TeacherResponse]:
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(status_code=404, detail="Kelas tidak ditemukan.")
+
+    assignments = db.scalars(
+        select(TeacherClassAssignment).where(TeacherClassAssignment.class_id == class_id)
+    ).all()
+    teacher_ids = [a.teacher_id for a in assignments]
+    if not teacher_ids:
+        return []
+    teachers = db.scalars(select(User).where(User.id.in_(teacher_ids))).all()
+    return [TeacherResponse.model_validate(t) for t in teachers]
+
+
+@router.post(
+    "/classes/{class_id}/teachers/{teacher_id}",
+    status_code=status.HTTP_201_CREATED,
+)
+def assign_teacher_to_class(
+    class_id: int,
+    teacher_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> dict:
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(status_code=404, detail="Kelas tidak ditemukan.")
+
+    teacher = db.scalar(select(User).where(User.id == teacher_id))
+    if teacher is None or str(teacher.role).lower() != UserRole.TEACHER.value:
+        raise HTTPException(status_code=404, detail="Guru tidak ditemukan.")
+
+    existing = db.scalar(
+        select(TeacherClassAssignment).where(
+            TeacherClassAssignment.class_id == class_id,
+            TeacherClassAssignment.teacher_id == teacher_id,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Guru sudah terdaftar di kelas ini.",
+        )
+
+    assignment = TeacherClassAssignment(class_id=class_id, teacher_id=teacher_id)
+    db.add(assignment)
+    db.commit()
+    return {"message": "Guru berhasil ditambahkan ke kelas."}
+
+
+@router.delete(
+    "/classes/{class_id}/teachers/{teacher_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_teacher_from_class(
+    class_id: int,
+    teacher_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> None:
+    assignment = db.scalar(
+        select(TeacherClassAssignment).where(
+            TeacherClassAssignment.class_id == class_id,
+            TeacherClassAssignment.teacher_id == teacher_id,
+        )
+    )
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Guru tidak terdaftar di kelas ini.",
+        )
+    db.delete(assignment)
     db.commit()
