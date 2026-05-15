@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
+import '../../widgets/app_feedback.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/loading_state.dart';
 
 class AdminStudentsScreen extends StatefulWidget {
   const AdminStudentsScreen({super.key, required this.session});
@@ -124,6 +126,12 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
                         );
                         if (context.mounted) Navigator.pop(context);
                         _refresh();
+                        if (mounted) {
+                          AppFeedback.success(
+                            this.context,
+                            'Siswa berhasil ditambahkan.',
+                          );
+                        }
                       } catch (e) {
                         setDialogState(() {
                           error = e.toString();
@@ -175,15 +183,14 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       await widget.session.api.adminDeleteUser(student['id'] as int);
       _refresh();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${student['name']} berhasil dihapus')),
+        AppFeedback.success(
+          context,
+          '${student['name']} berhasil dihapus.',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppFeedback.error(context, e.toString());
       }
     }
   }
@@ -212,7 +219,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         future: _studentsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
           if (snapshot.hasError) {
             return AppErrorView(

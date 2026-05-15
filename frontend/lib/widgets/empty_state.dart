@@ -19,42 +19,46 @@ class EmptyState extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 120,
-              color: colorScheme.primary.withValues(alpha: 0.05),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
+        padding: const EdgeInsets.all(28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.75),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
                   icon,
-                  size: 48,
+                  size: 36,
                   color: colorScheme.primary,
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(height: 6),
+              ),
+              if (message.isNotEmpty) ...[
+                const SizedBox(height: 8),
                 Text(
                   message,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
+                    height: 1.35,
                   ),
                 ),
               ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

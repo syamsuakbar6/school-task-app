@@ -18,7 +18,7 @@ class GradientActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final enabled = onPressed != null && !isLoading;
-    final borderRadius = BorderRadius.circular(12);
+    final borderRadius = BorderRadius.circular(8);
     final gradient = LinearGradient(
       colors: [
         colorScheme.primary,

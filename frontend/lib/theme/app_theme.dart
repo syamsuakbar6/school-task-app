@@ -4,7 +4,7 @@ class AppTheme {
   AppTheme._();
 
   static const seedColor = Color(0xFF3D5AFE);
-  static const lightSurface = Color(0xFFF8F7F4);
+  static const lightSurface = Color(0xFFF7F8FC);
   static const darkSurface = Color(0xFF111318);
   static const darkCard = Color(0xFF1E2128);
 
@@ -16,8 +16,10 @@ class AppTheme {
     final scheme = baseScheme.copyWith(
       surface: lightSurface,
       surfaceContainerLowest: Colors.white,
-      surfaceContainerLow: const Color(0xFFFCFBF8),
-      surfaceContainer: const Color(0xFFF1F0EC),
+      surfaceContainerLow: const Color(0xFFFFFFFF),
+      surfaceContainer: const Color(0xFFEDEFF7),
+      secondary: const Color(0xFF00897B),
+      tertiary: const Color(0xFFF57C00),
     );
 
     return _themeData(
@@ -59,11 +61,11 @@ class AppTheme {
   }) {
     final textTheme = _textTheme(colorScheme);
     final inputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide.none,
     );
     final focusedInputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(color: colorScheme.primary, width: 1.4),
     );
 
@@ -80,7 +82,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -117,7 +119,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
           ),
           textStyle: textTheme.labelLarge?.copyWith(
             fontWeight: FontWeight.w700,
@@ -128,19 +130,31 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
           ),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       ),
     );

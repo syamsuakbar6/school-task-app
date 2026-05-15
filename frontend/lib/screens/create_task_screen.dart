@@ -244,7 +244,7 @@ class _DeadlinePickerCard extends StatelessWidget {
           ? colorScheme.primaryContainer.withValues(alpha: 0.46)
           : Theme.of(context).cardColor,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
         onTap: onPressed,
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -255,7 +255,7 @@ class _DeadlinePickerCard extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   color: colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.calendar_month_outlined,
@@ -330,7 +330,7 @@ class _ClassErrorField extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
@@ -367,7 +367,7 @@ class _CreateTaskError extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [

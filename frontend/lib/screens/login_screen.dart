@@ -264,7 +264,7 @@ class _LoginError extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [

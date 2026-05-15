@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
+import '../../widgets/app_feedback.dart';
+import '../../widgets/loading_state.dart';
 
 class AdminAssignTeachersScreen extends StatefulWidget {
   const AdminAssignTeachersScreen({
@@ -53,18 +55,22 @@ class _AdminAssignTeachersScreenState extends State<AdminAssignTeachersScreen> {
           teacherId: teacherId,
         );
         setState(() => _assignedIds.remove(teacherId));
+        if (mounted) {
+          AppFeedback.success(context, 'Guru dilepas dari kelas.');
+        }
       } else {
         await widget.session.api.adminAssignTeacherToClass(
           classId: classId,
           teacherId: teacherId,
         );
         setState(() => _assignedIds.add(teacherId));
+        if (mounted) {
+          AppFeedback.success(context, 'Guru ditambahkan ke kelas.');
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppFeedback.error(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -96,7 +102,7 @@ class _AdminAssignTeachersScreenState extends State<AdminAssignTeachersScreen> {
         future: _allTeachersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
           if (snapshot.hasError) {
             return AppErrorView(message: snapshot.error.toString());

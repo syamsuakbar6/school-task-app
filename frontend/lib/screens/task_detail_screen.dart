@@ -8,8 +8,10 @@ import '../services/api_service.dart';
 import '../services/auth_session.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/app_error_view.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/gradient_action_button.dart';
+import '../widgets/loading_state.dart';
 import '../widgets/submission_list_tile.dart';
 import 'submit_task_screen.dart';
 
@@ -71,14 +73,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       );
       _refresh();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Grade saved')),
-      );
+      AppFeedback.success(context, 'Nilai berhasil disimpan.');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      AppFeedback.error(context, error.toString());
     }
   }
 
@@ -97,9 +95,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      AppFeedback.error(context, error.toString());
     }
   }
 
@@ -109,9 +105,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       await _saveDownloadedFile(file);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      AppFeedback.error(context, error.toString());
     }
   }
 
@@ -122,13 +116,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       bytes: file.bytes,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          savedPath == null ? 'Download cancelled' : 'Saved to $savedPath',
-        ),
-      ),
-    );
+    if (savedPath == null) {
+      AppFeedback.error(context, 'Download dibatalkan.');
+    } else {
+      AppFeedback.success(context, 'File berhasil disimpan.');
+    }
   }
 
   @override
@@ -159,7 +151,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         future: _taskFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList(itemCount: 4);
           }
 
           if (snapshot.hasError) {
@@ -180,6 +172,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ),
               ),
               const SizedBox(height: 14),
+              if (task.isClosed) ...[
+                _ClosedTaskNotice(deadline: task.deadline),
+                const SizedBox(height: 14),
+              ],
               _DeadlineChip(deadline: task.deadline, isClosed: task.isClosed),
               const SizedBox(height: 22),
               Card(
@@ -228,12 +224,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       isLoading:
                           snapshot.connectionState == ConnectionState.waiting,
                       submission: currentUserSubmission,
+                      taskIsClosed: task.isClosed,
                     );
                   },
                 ),
                 const SizedBox(height: 16),
                 GradientActionButton(
-                  label: 'Submit task',
+                  label: task.isClosed ? 'Tugas ditutup' : 'Kumpulkan tugas',
                   icon: Icons.upload_file_outlined,
                   onPressed: task.isClosed ? null : () => _openSubmit(task),
                 ),
@@ -352,10 +349,12 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
   const _StudentSubmissionStatusCard({
     required this.isLoading,
     required this.submission,
+    required this.taskIsClosed,
   });
 
   final bool isLoading;
   final Submission? submission;
+  final bool taskIsClosed;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +366,11 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
             submission!.submittedAt.toLocal(),
           );
     final isSubmitted = submission != null;
-    final color = isSubmitted ? Colors.green : colorScheme.secondary;
+    final color = isSubmitted
+        ? Colors.green
+        : taskIsClosed
+            ? colorScheme.error
+            : colorScheme.secondary;
 
     return Card(
       color: color.withValues(alpha: 0.1),
@@ -378,7 +381,9 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
             Icon(
               isSubmitted
                   ? Icons.check_circle_outline
-                  : Icons.pending_actions_outlined,
+                  : taskIsClosed
+                      ? Icons.lock_clock_outlined
+                      : Icons.pending_actions_outlined,
               color: color,
             ),
             const SizedBox(width: 12),
@@ -388,10 +393,12 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
                 children: [
                   Text(
                     isLoading
-                        ? 'Checking submission'
+                        ? 'Mengecek pengumpulan'
                         : isSubmitted
                             ? submission!.statusLabel
-                            : 'Not submitted',
+                            : taskIsClosed
+                                ? 'Belum dikumpulkan'
+                                : 'Belum dikumpulkan',
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: color,
                       fontWeight: FontWeight.w800,
@@ -400,12 +407,67 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     isLoading
-                        ? 'Please wait.'
+                        ? 'Mohon tunggu.'
                         : isSubmitted
-                            ? 'Submitted at $submittedAt'
-                            : 'Upload your work before the deadline.',
+                            ? 'Dikumpulkan pada $submittedAt'
+                            : taskIsClosed
+                                ? 'Deadline sudah lewat. Kamu tidak bisa mengumpulkan tugas ini lagi.'
+                                : 'Unggah pekerjaan sebelum deadline.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ClosedTaskNotice extends StatelessWidget {
+  const _ClosedTaskNotice({required this.deadline});
+
+  final DateTime? deadline;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final deadlineText = deadline == null
+        ? null
+        : DateFormat('d MMMM yyyy HH:mm').format(deadline!.toLocal());
+
+    return Card(
+      color: colorScheme.errorContainer.withValues(alpha: 0.72),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.lock_clock_outlined, color: colorScheme.error),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tugas sudah ditutup',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    deadlineText == null
+                        ? 'Tugas ini tidak menerima pengumpulan baru.'
+                        : 'Deadline berakhir pada $deadlineText. Pengumpulan baru tidak tersedia.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onErrorContainer,
+                      height: 1.35,
                     ),
                   ),
                 ],
@@ -442,7 +504,7 @@ class _SubmissionFilePreviewDialog extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
         child: file.isImage
             ? ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 child: Image.memory(
                   file.bytes,
                   fit: BoxFit.contain,
@@ -501,9 +563,13 @@ class _DeadlineChip extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final urgent = _isUrgent(deadline) && !isClosed;
     final text = deadline == null
-        ? 'No deadline'
+        ? 'Tidak ada deadline'
         : DateFormat('EEEE, d MMMM yyyy HH:mm').format(deadline!.toLocal());
-    final foreground = urgent ? colorScheme.error : colorScheme.primary;
+    final foreground = isClosed
+        ? colorScheme.error
+        : urgent
+            ? colorScheme.error
+            : colorScheme.primary;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -518,7 +584,11 @@ class _DeadlineChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              urgent ? Icons.warning_amber_outlined : Icons.event_outlined,
+              isClosed
+                  ? Icons.lock_clock_outlined
+                  : urgent
+                      ? Icons.warning_amber_outlined
+                      : Icons.event_outlined,
               size: 18,
               color: foreground,
             ),

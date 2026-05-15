@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
+import '../../widgets/app_feedback.dart';
+import '../../widgets/loading_state.dart';
 
 class AdminAssignScreen extends StatefulWidget {
   const AdminAssignScreen({
@@ -62,11 +64,12 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         studentId: studentId,
       );
       setState(() => _assignedIds.add(studentId));
+      if (mounted) {
+        AppFeedback.success(context, 'Siswa berhasil ditambahkan.');
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppFeedback.error(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -149,9 +152,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppFeedback.error(context, e.toString());
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -196,7 +197,7 @@ class _AdminAssignScreenState extends State<AdminAssignScreen> {
         future: _allStudentsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
           if (snapshot.hasError) {
             return AppErrorView(message: snapshot.error.toString());

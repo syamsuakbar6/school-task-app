@@ -115,86 +115,97 @@ class AdminDashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header card
-            Card(
-              color: colorScheme.primary,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    colors: [
-                      colorScheme.primary,
-                      Color.lerp(colorScheme.primary, Colors.black, 0.2)!,
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(
-                        Icons.admin_panel_settings_outlined,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Panel Administrator',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Kelola data siswa, kelas, dan pengguna sistem',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final crossAxisCount = constraints.maxWidth >= 560 ? 3 : 2;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  color: colorScheme.primary,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      gradient: LinearGradient(
+                        colors: [
+                          colorScheme.primary,
+                          Color.lerp(colorScheme.primary, Colors.black, 0.18)!,
                         ],
                       ),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_outlined,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Panel Administrator',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Kelola siswa, guru, kelas, dan akun pengguna',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.white.withValues(alpha: 0.82),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 22),
+                Text(
+                  'Menu',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  itemCount: menus.length,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.08,
+                  ),
+                  itemBuilder: (context, index) {
+                    return _AdminMenuCard(menu: menus[index]);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Menu',
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            // Grid menu
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.1,
-              children: menus
-                  .map((menu) => _AdminMenuCard(menu: menu))
-                  .toList(),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -240,7 +251,7 @@ class _AdminMenuCard extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: menu.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(menu.icon, color: menu.color, size: 24),
               ),

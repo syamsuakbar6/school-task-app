@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_exception.dart';
 import '../services/auth_session.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/gradient_action_button.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -47,9 +48,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         newPassword: _newPasswordController.text,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password berhasil diganti.')),
-      );
+      AppFeedback.success(context, 'Password berhasil diganti.');
       Navigator.of(context).pop();
     } on ApiException catch (error) {
       setState(() => _errorMessage = error.message);
@@ -190,7 +189,7 @@ class _PasswordError extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.errorContainer.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [

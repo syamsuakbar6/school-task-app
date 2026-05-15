@@ -8,7 +8,9 @@ import '../services/notification_service.dart';
 import '../theme/theme_mode_scope.dart';
 import '../widgets/app_page_route.dart';
 import '../widgets/app_error_view.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/loading_state.dart';
 import '../widgets/task_list_tile.dart';
 import 'change_password_screen.dart';
 import 'create_task_screen.dart';
@@ -107,10 +109,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
       tasks = tasks.where((task) => !_hiddenTaskIds.contains(task.id)).toList();
     }
 
-    // Sort: deadline terdekat di atas, task tanpa deadline di bawah
+    // Sort: tugas aktif di atas, lalu deadline terdekat.
     tasks.sort((a, b) {
+      if (a.isClosed != b.isClosed) {
+        return a.isClosed ? 1 : -1;
+      }
       if (a.deadline == null && b.deadline == null) return 0;
-      if (a.deadline == null) return 1;  // a ke bawah
+      if (a.deadline == null) return 1; // a ke bawah
       if (b.deadline == null) return -1; // b ke bawah
       return a.deadline!.compareTo(b.deadline!);
     });
@@ -225,6 +230,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
       _hiddenTaskIds.map((id) => id.toString()).toList(),
     );
     await _reloadTasks();
+    if (mounted) {
+      AppFeedback.success(context, 'Tugas dihapus dari list.');
+    }
   }
 
   @override
@@ -330,7 +338,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         future: _tasksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
 
           if (snapshot.hasError) {
@@ -489,6 +497,8 @@ class _TaskListBody extends StatelessWidget {
           final taskIndex = index - 1;
           final task = tasks[taskIndex];
           final submission = submissionsByTaskId[task.id];
+          final showNewBadge =
+              showSubmissionStatus && !task.isClosed && submission == null;
           final canHide = showSubmissionStatus &&
               onHideTask != null &&
               (task.isClosed || submission != null);
@@ -502,6 +512,7 @@ class _TaskListBody extends StatelessWidget {
               showSubmissionStatus: showSubmissionStatus,
               onTap: () => onOpenTask(task),
               onHide: canHide ? () => onHideTask!(task) : null,
+              showNewBadge: showNewBadge,
             ),
           );
         },
@@ -530,7 +541,7 @@ class _TaskSummaryCard extends StatelessWidget {
       color: colorScheme.primary,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           gradient: LinearGradient(
             colors: [
               colorScheme.primary,
@@ -548,7 +559,7 @@ class _TaskSummaryCard extends StatelessWidget {
               height: 52,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.assignment_outlined, color: Colors.white),
             ),
@@ -566,7 +577,7 @@ class _TaskSummaryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$totalCount total tugas • diurutkan by deadline',
+                    '$totalCount total tugas • aktif selalu di atas',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.white.withValues(alpha: 0.76),
                       fontWeight: FontWeight.w600,

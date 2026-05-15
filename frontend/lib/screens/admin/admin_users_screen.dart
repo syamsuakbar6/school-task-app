@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/loading_state.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key, required this.session});
@@ -66,10 +67,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         future: _usersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
           if (snapshot.hasError) {
-            return AppErrorView(message: snapshot.error.toString(), onRetry: _refresh);
+            return AppErrorView(
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
           }
 
           final users = snapshot.data ?? [];

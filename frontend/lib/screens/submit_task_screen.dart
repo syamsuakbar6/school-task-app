@@ -141,7 +141,7 @@ class _SubmitTaskScreenState extends State<SubmitTaskScreen> {
                 minimumSize: const Size(140, 46),
                 backgroundColor: Colors.green.shade600,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
               child: const Text('Oke, Siap!'),
@@ -219,14 +219,14 @@ class _FileDropzone extends StatelessWidget {
           ? colorScheme.primaryContainer.withValues(alpha: 0.45)
           : Theme.of(context).cardColor,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: CustomPaint(
           painter: _DashedBorderPainter(
             color: hasFile
                 ? colorScheme.primary.withValues(alpha: 0.42)
                 : colorScheme.outlineVariant,
-            radius: 16,
+            radius: 8,
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
@@ -360,7 +360,7 @@ class _StatusMessage extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colorScheme.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_session.dart';
 import '../../widgets/app_error_view.dart';
+import '../../widgets/app_feedback.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/loading_state.dart';
 import 'admin_assign_screen.dart';
 import 'admin_assign_teachers_screen.dart';
 import '../../widgets/app_page_route.dart';
@@ -118,6 +120,12 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         );
                         if (context.mounted) Navigator.pop(context);
                         _refresh();
+                        if (mounted) {
+                          AppFeedback.success(
+                            this.context,
+                            'Kelas berhasil dibuat.',
+                          );
+                        }
                       } catch (e) {
                         setDialogState(() {
                           error = e.toString();
@@ -169,15 +177,14 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
       await widget.session.api.adminDeleteClass(cls['id'] as int);
       _refresh();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${cls['name']} berhasil dihapus')),
+        AppFeedback.success(
+          context,
+          '${cls['name']} berhasil dihapus.',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppFeedback.error(context, e.toString());
       }
     }
   }
@@ -203,7 +210,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
         future: _classesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingList();
           }
           if (snapshot.hasError) {
             return AppErrorView(
@@ -241,7 +248,7 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         height: 48,
                         decoration: BoxDecoration(
                           color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           Icons.class_outlined,

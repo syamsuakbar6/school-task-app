@@ -12,6 +12,7 @@ class TaskListTile extends StatefulWidget {
     this.submission,
     this.showSubmissionStatus = false,
     this.onHide,
+    this.showNewBadge = false,
   });
 
   final Task task;
@@ -19,6 +20,7 @@ class TaskListTile extends StatefulWidget {
   final Submission? submission;
   final bool showSubmissionStatus;
   final VoidCallback? onHide;
+  final bool showNewBadge;
 
   @override
   State<TaskListTile> createState() => _TaskListTileState();
@@ -36,9 +38,18 @@ class _TaskListTileState extends State<TaskListTile> {
     final submission = widget.submission;
     final isUrgent = _isUrgent(task.deadline) && !task.isClosed;
     final deadline = task.deadline == null
-        ? 'No deadline'
+        ? 'Tidak ada deadline'
         : DateFormat('EEE, d MMM yyyy HH:mm').format(task.deadline!.toLocal());
-    final deadlineColor = isUrgent ? colorScheme.error : colorScheme.secondary;
+    final deadlineColor = task.isClosed
+        ? colorScheme.onSurfaceVariant
+        : isUrgent
+            ? colorScheme.error
+            : colorScheme.secondary;
+    final sideColor = task.isClosed
+        ? colorScheme.outlineVariant
+        : widget.showNewBadge
+            ? colorScheme.tertiary
+            : colorScheme.primary;
 
     return AnimatedScale(
       scale: _isPressed || _isHovered ? 0.98 : 1,
@@ -62,7 +73,7 @@ class _TaskListTileState extends State<TaskListTile> {
                   children: [
                     Container(
                       width: 4,
-                      color: colorScheme.primary,
+                      color: sideColor,
                     ),
                     Expanded(
                       child: Padding(
@@ -73,14 +84,41 @@ class _TaskListTileState extends State<TaskListTile> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    task.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          task.title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodyLarge
+                                              ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                            color: task.isClosed
+                                                ? colorScheme.onSurfaceVariant
+                                                : colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                      if (widget.showNewBadge) ...[
+                                        const SizedBox(width: 8),
+                                        const _NewTaskBadge(),
+                                      ],
+                                    ],
                                   ),
+                                  if (task.isClosed) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Deadline sudah lewat',
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.error,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 10),
                                   Row(
                                     children: [
@@ -180,8 +218,8 @@ class _SubmissionStatusLine extends StatelessWidget {
     final submitted = submission != null;
     final color = submitted ? Colors.green : colorScheme.onSurfaceVariant;
     final text = submitted
-        ? 'Submitted ${DateFormat('d MMM HH:mm').format(submission!.submittedAt.toLocal())}'
-        : 'Not submitted';
+        ? 'Dikumpulkan ${DateFormat('d MMM HH:mm').format(submission!.submittedAt.toLocal())}'
+        : 'Belum dikumpulkan';
 
     return Row(
       children: [
@@ -229,10 +267,39 @@ class _TaskStatusChip extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         child: Text(
-          task.isClosed ? 'Closed' : 'Open',
+          task.isClosed ? 'Ditutup' : 'Dibuka',
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: foregroundColor,
                 fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewTaskBadge extends StatelessWidget {
+  const _NewTaskBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.tertiary.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: colorScheme.tertiary.withValues(alpha: 0.38),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          'Baru',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.tertiary,
+                fontWeight: FontWeight.w900,
               ),
         ),
       ),
