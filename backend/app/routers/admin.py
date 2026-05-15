@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from io import BytesIO
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 
@@ -29,6 +31,11 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 class CreateStudentRequest(BaseModel):
     name: str = Field(min_length=3, max_length=100)
     nisn: str = Field(min_length=10, max_length=10, pattern=r'^\d{10}$')
+
+
+class CreateTeacherRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=100)
+    nip: str = Field(min_length=18, max_length=18, pattern=r'^\d{18}$')
 
 
 class CreateClassRequest(BaseModel):
@@ -77,6 +84,15 @@ class ClassWithStudentsResponse(BaseModel):
         from_attributes = True
 
 
+class StudentImportResponse(BaseModel):
+    total_rows: int
+    assigned_count: int
+    created_count: int
+    skipped_count: int
+    assigned: list[StudentResponse] = Field(default_factory=list)
+    skipped: list[dict[str, str]] = Field(default_factory=list)
+
+
 # ── User endpoints ────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=list[UserResponse])
@@ -113,6 +129,31 @@ def create_student(
     db.commit()
     db.refresh(student)
     return UserResponse.model_validate(student)
+
+
+@router.post("/teachers", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_teacher(
+    payload: CreateTeacherRequest,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> UserResponse:
+    existing = db.scalar(select(User).where(User.nip == payload.nip))
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="NIP sudah terdaftar.",
+        )
+
+    teacher = User(
+        name=payload.name.strip(),
+        nip=payload.nip,
+        role=UserRole.TEACHER.value,
+        password=hash_password(payload.nip),
+    )
+    db.add(teacher)
+    db.commit()
+    db.refresh(teacher)
+    return UserResponse.model_validate(teacher)
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -259,14 +300,17 @@ def assign_student_to_class(
 
     existing = db.scalar(
         select(ClassMembership).where(
-            ClassMembership.class_id == class_id,
             ClassMembership.student_id == student_id,
         )
     )
     if existing:
+        if existing.class_id == class_id:
+            detail = "Siswa sudah terdaftar di kelas ini."
+        else:
+            detail = "Siswa sudah terdaftar di kelas lain."
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Siswa sudah terdaftar di kelas ini.",
+            detail=detail,
         )
 
     membership = ClassMembership(class_id=class_id, student_id=student_id)
@@ -298,6 +342,167 @@ def remove_student_from_class(
         )
     db.delete(membership)
     db.commit()
+
+
+@router.post(
+    "/classes/{class_id}/students/import",
+    response_model=StudentImportResponse,
+)
+async def import_students_to_class(
+    class_id: int,
+    file: UploadFile,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> StudentImportResponse:
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(status_code=404, detail="Kelas tidak ditemukan.")
+
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".xlsx", ".xlsm")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File harus berformat .xlsx atau .xlsm.",
+        )
+
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(
+            filename=BytesIO(await file.read()),
+            read_only=True,
+            data_only=True,
+        )
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Dependency openpyxl belum terinstall di server.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File Excel tidak bisa dibaca.",
+        ) from exc
+
+    sheet = workbook.active
+    rows = sheet.iter_rows(values_only=True)
+    headers = next(rows, None)
+    if not headers:
+        return StudentImportResponse(
+            total_rows=0,
+            assigned_count=0,
+            created_count=0,
+            skipped_count=0,
+        )
+
+    header_map = {
+        _normalize_excel_header(header): index
+        for index, header in enumerate(headers)
+        if header is not None
+    }
+    nisn_index = header_map.get("nisn")
+    if nisn_index is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kolom NISN tidak ditemukan.",
+        )
+    name_index = header_map.get("nama")
+    if name_index is None:
+        name_index = header_map.get("name")
+
+    assigned: list[User] = []
+    created_count = 0
+    skipped: list[dict[str, str]] = []
+    seen_nisn: set[str] = set()
+    total_rows = 0
+
+    for row_number, row in enumerate(rows, start=2):
+        nisn = _cell_to_text(row[nisn_index] if nisn_index < len(row) else None)
+        name = _cell_to_text(
+            row[name_index] if name_index is not None and name_index < len(row) else None
+        )
+        if not nisn:
+            continue
+
+        total_rows += 1
+        if nisn in seen_nisn:
+            skipped.append({
+                "row": str(row_number),
+                "nisn": nisn,
+                "reason": "NISN duplikat di file.",
+            })
+            continue
+        seen_nisn.add(nisn)
+
+        if len(nisn) != 10 or not nisn.isdigit():
+            skipped.append({
+                "row": str(row_number),
+                "nisn": nisn,
+                "reason": "NISN harus 10 digit angka.",
+            })
+            continue
+
+        student = db.scalar(select(User).where(User.nisn == nisn))
+        if student is None or str(student.role).lower() != UserRole.STUDENT.value:
+            if len(name.strip()) < 3:
+                skipped.append({
+                    "row": str(row_number),
+                    "nisn": nisn,
+                    "reason": "Siswa tidak ditemukan dan kolom nama kosong.",
+                })
+                continue
+            student = User(
+                name=name.strip(),
+                nisn=nisn,
+                role=UserRole.STUDENT.value,
+                password=hash_password(nisn),
+            )
+            db.add(student)
+            db.flush()
+            created_count += 1
+
+        existing = db.scalar(
+            select(ClassMembership).where(ClassMembership.student_id == student.id)
+        )
+        if existing:
+            reason = (
+                "Siswa sudah terdaftar di kelas ini."
+                if existing.class_id == class_id
+                else "Siswa sudah terdaftar di kelas lain."
+            )
+            skipped.append({
+                "row": str(row_number),
+                "nisn": nisn,
+                "reason": reason,
+            })
+            continue
+
+        db.add(ClassMembership(class_id=class_id, student_id=student.id))
+        assigned.append(student)
+
+    db.commit()
+    return StudentImportResponse(
+        total_rows=total_rows,
+        assigned_count=len(assigned),
+        created_count=created_count,
+        skipped_count=len(skipped),
+        assigned=[StudentResponse.model_validate(student) for student in assigned],
+        skipped=skipped,
+    )
+
+
+def _normalize_excel_header(value: object) -> str:
+    return "".join(str(value).strip().lower().split()).replace("_", "")
+
+
+def _cell_to_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, int):
+        return str(value).strip().zfill(10)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value)).strip().zfill(10)
+    return str(value).strip()
 
 
 @router.get("/classes/{class_id}/teachers", response_model=list[TeacherResponse])

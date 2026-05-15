@@ -11,12 +11,14 @@ class TaskListTile extends StatefulWidget {
     required this.onTap,
     this.submission,
     this.showSubmissionStatus = false,
+    this.onHide,
   });
 
   final Task task;
   final VoidCallback onTap;
   final Submission? submission;
   final bool showSubmissionStatus;
+  final VoidCallback? onHide;
 
   @override
   State<TaskListTile> createState() => _TaskListTileState();
@@ -122,11 +124,27 @@ class _TaskListTileState extends State<TaskListTile> {
                               children: [
                                 _TaskStatusChip(task: task),
                                 const SizedBox(height: 8),
-                                Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 18,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
+                                if (widget.onHide != null)
+                                  IconButton(
+                                    tooltip: 'Hapus dari list',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                      color: colorScheme.error,
+                                    ),
+                                    onPressed: widget.onHide,
+                                  )
+                                else
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 18,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
                               ],
                             ),
                           ],

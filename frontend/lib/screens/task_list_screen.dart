@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/submission.dart';
 import '../models/task.dart';
@@ -28,6 +29,7 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Task>> _tasksFuture;
   Future<List<Submission>>? _studentSubmissionsFuture;
+  Set<int> _hiddenTaskIds = {};
 
   // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
@@ -37,10 +39,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
   @override
   void initState() {
     super.initState();
+    _tasksFuture = Future.value(const <Task>[]);
     _initLoad();
   }
 
   Future<void> _initLoad() async {
+    if (widget.session.user?.isStudent == true) {
+      await _loadHiddenTaskIds();
+    }
     if (widget.session.user?.isTeacher == true) {
       await _loadClasses();
     } else {
@@ -48,6 +54,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
     // Cek deadline saat app dibuka (in-app check)
     await NotificationService.checkAndNotifyDeadlines();
+  }
+
+  Future<void> _loadHiddenTaskIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final values = prefs.getStringList(_hiddenTasksKey()) ?? const <String>[];
+    _hiddenTaskIds = values
+        .map(int.tryParse)
+        .whereType<int>()
+        .toSet();
+  }
+
+  String _hiddenTasksKey() {
+    return 'hidden_task_ids_user_${widget.session.user?.id ?? 0}';
   }
 
   Future<void> _loadClasses() async {
@@ -79,9 +98,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   /// Fetch tasks dari API, sort by deadline, lalu cache untuk notifikasi.
   Future<List<Task>> _fetchAndCacheTasks() async {
-    final tasks = await widget.session.api.fetchTasks(
+    var tasks = await widget.session.api.fetchTasks(
       classId: _selectedClassId,
     );
+
+    if (widget.session.user?.isStudent == true && _hiddenTaskIds.isNotEmpty) {
+      tasks = tasks.where((task) => !_hiddenTaskIds.contains(task.id)).toList();
+    }
 
     // Sort: deadline terdekat di atas, task tanpa deadline di bawah
     tasks.sort((a, b) {
@@ -168,6 +191,37 @@ class _TaskListScreenState extends State<TaskListScreen> {
           taskId: task.id,
         ),
       ),
+    );
+    await _reloadTasks();
+  }
+
+  Future<void> _hideTask(Task task) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hapus dari List'),
+        content: Text(
+          'Hapus tugas "${task.title}" dari list kamu? Data tugas dan submission tetap tersimpan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    _hiddenTaskIds.add(task.id);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _hiddenTasksKey(),
+      _hiddenTaskIds.map((id) => id.toString()).toList(),
     );
     await _reloadTasks();
   }
@@ -293,6 +347,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
                   onRefresh: _reloadTasks,
                   onOpenTask: _openTaskDetail,
+                  onHideTask: _hideTask,
                 );
               },
             );
@@ -305,6 +360,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             submissionsByTaskId: const {},
             onRefresh: _reloadTasks,
             onOpenTask: _openTaskDetail,
+            onHideTask: null,
           );
         },
       ),
@@ -381,6 +437,7 @@ class _TaskListBody extends StatelessWidget {
     required this.submissionsByTaskId,
     required this.onRefresh,
     required this.onOpenTask,
+    required this.onHideTask,
   });
 
   final List<Task> tasks;
@@ -389,6 +446,7 @@ class _TaskListBody extends StatelessWidget {
   final Map<int, Submission> submissionsByTaskId;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Task task) onOpenTask;
+  final Future<void> Function(Task task)? onHideTask;
 
   @override
   Widget build(BuildContext context) {
@@ -422,15 +480,20 @@ class _TaskListBody extends StatelessWidget {
 
           final taskIndex = index - 1;
           final task = tasks[taskIndex];
+          final submission = submissionsByTaskId[task.id];
+          final canHide = showSubmissionStatus &&
+              onHideTask != null &&
+              (task.isClosed || submission != null);
           return AnimatedContainer(
             key: ValueKey<int>(task.id),
             duration: Duration(milliseconds: 180 + (taskIndex * 24)),
             curve: Curves.easeOutCubic,
             child: TaskListTile(
               task: task,
-              submission: submissionsByTaskId[task.id],
+              submission: submission,
               showSubmissionStatus: showSubmissionStatus,
               onTap: () => onOpenTask(task),
+              onHide: canHide ? () => onHideTask!(task) : null,
             ),
           );
         },

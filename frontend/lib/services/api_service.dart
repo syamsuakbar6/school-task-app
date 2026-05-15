@@ -254,6 +254,18 @@ class ApiService {
     return users.where((u) => u['role'] == 'teacher').toList();
   }
 
+  Future<Map<String, dynamic>> adminCreateTeacher({
+    required String nip,
+    required String name,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/teachers'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({'nip': nip, 'name': name}),
+    );
+    return _decodeObject(response);
+  }
+
   Future<Map<String, dynamic>> adminCreateStudent({
     required String nisn,
     required String name,
@@ -315,6 +327,35 @@ class ApiService {
       headers: _headers,
     );
     _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminImportStudentsToClass({
+    required int classId,
+    required PlatformFile file,
+  }) async {
+    final uri = Uri.parse('$baseUrl/admin/classes/$classId/students/import');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(_headers);
+
+    if (file.bytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        file.bytes!,
+        filename: file.name,
+      ));
+    } else if (file.path != null) {
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        file.path!,
+        filename: file.name,
+      ));
+    } else {
+      throw const ApiException('File Excel tidak bisa dibaca.');
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return _decodeObject(response);
   }
 
   Future<void> adminRemoveStudentFromClass({

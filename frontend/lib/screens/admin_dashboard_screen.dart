@@ -5,6 +5,7 @@ import '../theme/theme_mode_scope.dart';
 import '../widgets/app_page_route.dart';
 import 'admin/admin_classes_screen.dart';
 import 'admin/admin_students_screen.dart';
+import 'admin/admin_teachers_screen.dart';
 import 'admin/admin_users_screen.dart';
 import 'login_screen.dart';
 
@@ -42,10 +43,19 @@ class AdminDashboardScreen extends StatelessWidget {
       _AdminMenu(
         icon: Icons.class_outlined,
         label: 'Kelola Kelas',
-        description: 'Buat kelas baru dan assign siswa',
+        description: 'Buat kelas, assign siswa dan guru',
         color: Colors.green,
         onTap: () => Navigator.of(context).push(
           appPageRoute(AdminClassesScreen(session: session)),
+        ),
+      ),
+      _AdminMenu(
+        icon: Icons.school_outlined,
+        label: 'Kelola Guru',
+        description: 'Tambah, lihat, dan hapus akun guru',
+        color: Colors.teal,
+        onTap: () => Navigator.of(context).push(
+          appPageRoute(AdminTeachersScreen(session: session)),
         ),
       ),
       _AdminMenu(
