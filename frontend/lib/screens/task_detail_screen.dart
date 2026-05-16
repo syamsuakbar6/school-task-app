@@ -34,7 +34,9 @@ enum _SubmissionFilter { all, ungraded, graded }
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   late Future<Task> _taskFuture;
   late Future<List<Submission>> _submissionsFuture;
+  final _submissionSearchController = TextEditingController();
   _SubmissionFilter _submissionFilter = _SubmissionFilter.all;
+  String _submissionSearchQuery = '';
 
   @override
   void initState() {
@@ -53,6 +55,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     setState(_load);
   }
 
+  @override
+  void dispose() {
+    _submissionSearchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _openSubmit(Task task) async {
     final submitted = await Navigator.of(context).push<bool>(
       appPageRoute(
@@ -68,11 +76,16 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
-  Future<void> _grade(Submission submission, int grade) async {
+  Future<void> _grade(
+    Submission submission,
+    int grade,
+    String? feedback,
+  ) async {
     try {
       await widget.session.api.gradeSubmission(
         submissionId: submission.id,
         grade: grade,
+        feedback: feedback,
       );
       _refresh();
       if (!mounted) return;
@@ -180,6 +193,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 const SizedBox(height: 14),
               ],
               _DeadlineChip(deadline: task.deadline, isClosed: task.isClosed),
+              if (task.creatorName != null) ...[
+                const SizedBox(height: 10),
+                _TaskCreatorLine(creatorName: task.creatorName!),
+              ],
               const SizedBox(height: 22),
               Card(
                 color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -252,7 +269,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             gradedCount: 0,
                             ungradedCount: 0,
                             filter: _SubmissionFilter.all,
+                            searchController: null,
+                            searchQuery: '',
                             onFilterChanged: null,
+                            onSearchChanged: null,
                           ),
                           const SizedBox(height: 12),
                           Padding(
@@ -285,15 +305,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         .where((submission) => submission.grade != null)
                         .length;
                     final ungradedCount = submissions.length - gradedCount;
-                    final visibleSubmissions =
-                        _filterSubmissions(submissions);
+                    final visibleSubmissions = _filterSubmissions(submissions);
+                    final canGradeTask = task.createdBy == user?.id;
                     final header = _SubmissionsHeader(
                       count: submissions.length,
                       gradedCount: gradedCount,
                       ungradedCount: ungradedCount,
                       filter: _submissionFilter,
+                      searchController: _submissionSearchController,
+                      searchQuery: _submissionSearchQuery,
                       onFilterChanged: (filter) {
                         setState(() => _submissionFilter = filter);
+                      },
+                      onSearchChanged: (value) {
+                        setState(() => _submissionSearchQuery = value);
                       },
                     );
                     if (submissions.isEmpty) {
@@ -305,7 +330,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             gradedCount: 0,
                             ungradedCount: 0,
                             filter: _SubmissionFilter.all,
+                            searchController: null,
+                            searchQuery: '',
                             onFilterChanged: null,
+                            onSearchChanged: null,
                           ),
                           SizedBox(height: 12),
                           SizedBox(
@@ -313,8 +341,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             child: EmptyState(
                               icon: Icons.inbox_outlined,
                               title: 'Belum ada pengumpulan',
-                              message:
-                                  'Pengumpulan siswa akan muncul di sini.',
+                              message: 'Pengumpulan siswa akan muncul di sini.',
                             ),
                           ),
                         ],
@@ -326,50 +353,59 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       children: [
                         header,
                         const SizedBox(height: 12),
+                        if (!canGradeTask) ...[
+                          const _GradeOwnerNotice(),
+                          const SizedBox(height: 12),
+                        ],
                         if (visibleSubmissions.isEmpty)
                           const SizedBox(
                             height: 180,
                             child: EmptyState(
                               icon: Icons.filter_list_off_outlined,
                               title: 'Tidak ada data pada filter ini',
-                              message: 'Ubah filter untuk melihat pengumpulan lain.',
+                              message:
+                                  'Ubah filter untuk melihat pengumpulan lain.',
                             ),
                           )
                         else
-                        Column(
-                          children: [
-                            for (var index = 0;
-                                index < visibleSubmissions.length;
-                                index++)
-                              Builder(
-                                builder: (context) {
-                                  final submission = visibleSubmissions[index];
-                                  debugPrint(
-                                    'SUBMISSION COLUMN ITEM: '
-                                    'index=$index '
-                                    'id=${submission.id} '
-                                    'user=${submission.user.name} '
-                                    'file=${submission.fileName} '
-                                    'grade=${submission.grade}',
-                                  );
-                                  return SubmissionListTile(
-                                    key: ValueKey<int>(submission.id),
-                                    submission: submission,
-                                    onPreviewFile: submission.hasFile
-                                        ? () =>
-                                            _previewSubmissionFile(submission)
-                                        : null,
-                                    onDownloadFile: submission.hasFile
-                                        ? () =>
-                                            _downloadSubmissionFile(submission)
-                                        : null,
-                                    onGrade: (grade) =>
-                                        _grade(submission, grade),
-                                  );
-                                },
-                              ),
-                          ],
-                        ),
+                          Column(
+                            children: [
+                              for (var index = 0;
+                                  index < visibleSubmissions.length;
+                                  index++)
+                                Builder(
+                                  builder: (context) {
+                                    final submission =
+                                        visibleSubmissions[index];
+                                    debugPrint(
+                                      'SUBMISSION COLUMN ITEM: '
+                                      'index=$index '
+                                      'id=${submission.id} '
+                                      'user=${submission.user.name} '
+                                      'file=${submission.fileName} '
+                                      'grade=${submission.grade}',
+                                    );
+                                    return SubmissionListTile(
+                                      key: ValueKey<int>(submission.id),
+                                      submission: submission,
+                                      onPreviewFile: submission.hasFile
+                                          ? () =>
+                                              _previewSubmissionFile(submission)
+                                          : null,
+                                      onDownloadFile: submission.hasFile
+                                          ? () => _downloadSubmissionFile(
+                                              submission)
+                                          : null,
+                                      canGrade: canGradeTask,
+                                      gradeDisabledMessage:
+                                          'Hanya pembuat tugas yang dapat memberi nilai.',
+                                      onGrade: (grade, feedback) =>
+                                          _grade(submission, grade, feedback),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
                       ],
                     );
                   },
@@ -383,18 +419,104 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   }
 
   List<Submission> _filterSubmissions(List<Submission> submissions) {
+    final query = _submissionSearchQuery.trim().toLowerCase();
+    final List<Submission> filtered;
     switch (_submissionFilter) {
       case _SubmissionFilter.all:
-        return submissions;
+        filtered = List<Submission>.from(submissions);
+        break;
       case _SubmissionFilter.ungraded:
-        return submissions
+        filtered = submissions
             .where((submission) => submission.grade == null)
             .toList();
+        break;
       case _SubmissionFilter.graded:
-        return submissions
+        filtered = submissions
             .where((submission) => submission.grade != null)
             .toList();
+        break;
     }
+
+    final searched = query.isEmpty
+        ? filtered
+        : filtered
+            .where(
+              (submission) =>
+                  submission.user.name.toLowerCase().contains(query),
+            )
+            .toList();
+
+    searched.sort((a, b) {
+      if ((a.grade == null) != (b.grade == null)) {
+        return a.grade == null ? -1 : 1;
+      }
+      return b.submittedAt.compareTo(a.submittedAt);
+    });
+    return searched;
+  }
+}
+
+class _TaskCreatorLine extends StatelessWidget {
+  const _TaskCreatorLine({required this.creatorName});
+
+  final String creatorName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Icon(
+          Icons.person_outline,
+          size: 17,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Dibuat oleh $creatorName',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GradeOwnerNotice extends StatelessWidget {
+  const _GradeOwnerNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Hanya pembuat tugas yang dapat memberi nilai.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -675,14 +797,20 @@ class _SubmissionsHeader extends StatelessWidget {
     required this.gradedCount,
     required this.ungradedCount,
     required this.filter,
+    required this.searchController,
+    required this.searchQuery,
     required this.onFilterChanged,
+    required this.onSearchChanged,
   });
 
   final int count;
   final int gradedCount;
   final int ungradedCount;
   final _SubmissionFilter filter;
+  final TextEditingController? searchController;
+  final String searchQuery;
   final ValueChanged<_SubmissionFilter>? onFilterChanged;
+  final ValueChanged<String>? onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -705,7 +833,8 @@ class _SubmissionsHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 child: Text(
                   count.toString(),
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -735,6 +864,27 @@ class _SubmissionsHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        if (searchController != null && onSearchChanged != null) ...[
+          TextField(
+            controller: searchController,
+            onChanged: onSearchChanged,
+            decoration: InputDecoration(
+              hintText: 'Cari nama siswa',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Bersihkan pencarian',
+                      onPressed: () {
+                        searchController!.clear();
+                        onSearchChanged!('');
+                      },
+                      icon: const Icon(Icons.close),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(

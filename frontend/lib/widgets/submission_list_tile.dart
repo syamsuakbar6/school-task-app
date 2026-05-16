@@ -8,12 +8,16 @@ class SubmissionListTile extends StatelessWidget {
     super.key,
     required this.submission,
     required this.onGrade,
+    this.canGrade = true,
+    this.gradeDisabledMessage,
     this.onPreviewFile,
     this.onDownloadFile,
   });
 
   final Submission submission;
-  final ValueChanged<int> onGrade;
+  final void Function(int grade, String? feedback) onGrade;
+  final bool canGrade;
+  final String? gradeDisabledMessage;
   final VoidCallback? onPreviewFile;
   final VoidCallback? onDownloadFile;
 
@@ -34,6 +38,11 @@ class SubmissionListTile extends StatelessWidget {
     final submittedAt = DateFormat(
       'd MMM yyyy HH:mm',
     ).format(submission.submittedAt.toLocal());
+    final gradedAt = submission.gradedAt == null
+        ? null
+        : DateFormat('d MMM yyyy HH:mm').format(
+            submission.gradedAt!.toLocal(),
+          );
     final fileName = submission.fileName ?? 'Tidak ada file';
 
     return Card(
@@ -86,6 +95,29 @@ class SubmissionListTile extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (submission.grade != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _gradeMetadataText(gradedAt),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  if (submission.feedback?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Catatan: ${submission.feedback!.trim()}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   if (submission.hasFile) ...[
                     const SizedBox(height: 8),
                     Wrap(
@@ -109,9 +141,32 @@ class SubmissionListTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            _GradeAction(
-              grade: submission.grade,
-              onPressed: () => _showGradeDialog(context),
+            SizedBox(
+              width: 112,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _GradeAction(
+                    grade: submission.grade,
+                    canGrade: canGrade,
+                    onPressed: () => _showGradeDialog(context),
+                  ),
+                  if (!canGrade && gradeDisabledMessage != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      gradeDisabledMessage!,
+                      textAlign: TextAlign.end,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
@@ -129,33 +184,65 @@ class SubmissionListTile extends StatelessWidget {
     return parts.take(2).map((part) => part[0].toUpperCase()).join();
   }
 
+  String _gradeMetadataText(String? gradedAt) {
+    final graderName = submission.gradedBy?.name.trim();
+    if (graderName != null && graderName.isNotEmpty && gradedAt != null) {
+      return 'Dinilai oleh $graderName pada $gradedAt';
+    }
+    if (graderName != null && graderName.isNotEmpty) {
+      return 'Dinilai oleh $graderName';
+    }
+    if (gradedAt != null) return 'Dinilai pada $gradedAt';
+    return 'Sudah dinilai';
+  }
+
   Future<void> _showGradeDialog(BuildContext context) async {
+    if (!canGrade) return;
     final controller = TextEditingController(
       text: submission.grade?.toString() ?? '',
     );
+    final feedbackController = TextEditingController(
+      text: submission.feedback ?? '',
+    );
     String? errorText;
 
-    final grade = await showDialog<int>(
+    final result = await showDialog<_GradeDialogResult>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Beri nilai pengumpulan'),
-              content: TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Nilai',
-                  helperText: 'Masukkan angka 0 sampai 100',
-                  errorText: errorText,
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: (_) {
-                  if (errorText != null) {
-                    setDialogState(() => errorText = null);
-                  }
-                },
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Nilai',
+                      helperText: 'Masukkan angka 0 sampai 100',
+                      errorText: errorText,
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (_) {
+                      if (errorText != null) {
+                        setDialogState(() => errorText = null);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: feedbackController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Catatan nilai',
+                      hintText: 'Opsional',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -171,7 +258,13 @@ class SubmissionListTile extends StatelessWidget {
                       });
                       return;
                     }
-                    Navigator.pop(context, value);
+                    Navigator.pop(
+                      context,
+                      _GradeDialogResult(
+                        grade: value,
+                        feedback: feedbackController.text,
+                      ),
+                    );
                   },
                   child: const Text('Simpan'),
                 ),
@@ -183,9 +276,10 @@ class SubmissionListTile extends StatelessWidget {
     );
 
     controller.dispose();
+    feedbackController.dispose();
 
-    if (grade != null) {
-      onGrade(grade);
+    if (result != null) {
+      onGrade(result.grade, result.feedback);
     }
   }
 }
@@ -193,10 +287,12 @@ class SubmissionListTile extends StatelessWidget {
 class _GradeAction extends StatelessWidget {
   const _GradeAction({
     required this.grade,
+    required this.canGrade,
     required this.onPressed,
   });
 
   final int? grade;
+  final bool canGrade;
   final VoidCallback onPressed;
 
   @override
@@ -211,7 +307,7 @@ class _GradeAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: onPressed,
+          onTap: canGrade ? onPressed : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             child: Row(
@@ -238,7 +334,7 @@ class _GradeAction extends StatelessWidget {
     }
 
     return OutlinedButton(
-      onPressed: onPressed,
+      onPressed: canGrade ? onPressed : null,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 40),
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -246,7 +342,7 @@ class _GradeAction extends StatelessWidget {
         side: BorderSide(color: Colors.amber.shade700),
       ),
       child: Text(
-        'Beri nilai',
+        canGrade ? 'Beri nilai' : 'Terkunci',
         style: theme.textTheme.labelMedium?.copyWith(
           color: colorScheme.brightness == Brightness.dark
               ? Colors.amber.shade300
@@ -256,6 +352,16 @@ class _GradeAction extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GradeDialogResult {
+  const _GradeDialogResult({
+    required this.grade,
+    required this.feedback,
+  });
+
+  final int grade;
+  final String? feedback;
 }
 
 class _FileAction extends StatelessWidget {

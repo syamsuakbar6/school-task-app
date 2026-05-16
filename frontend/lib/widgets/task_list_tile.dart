@@ -121,6 +121,20 @@ class _TaskListTileState extends State<TaskListTile> {
                                       ),
                                     ),
                                   ],
+                                  if (!widget.showSubmissionStatus &&
+                                      task.creatorName != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Dibuat oleh ${task.creatorName}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 10),
                                   Row(
                                     children: [

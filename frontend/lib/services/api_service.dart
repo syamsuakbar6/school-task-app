@@ -54,7 +54,8 @@ class ApiService {
         )
         .timeout(
           const Duration(seconds: 30),
-          onTimeout: () => throw const ApiException('Koneksi timeout. Coba lagi.'),
+          onTimeout: () =>
+              throw const ApiException('Koneksi timeout. Coba lagi.'),
         );
 
     debugPrint('LOGIN STATUS: ${response.statusCode}');
@@ -244,11 +245,17 @@ class ApiService {
   Future<Submission> gradeSubmission({
     required int submissionId,
     required int grade,
+    String? feedback,
   }) async {
     final response = await _client.post(
       Uri.parse('$baseUrl/grade'),
       headers: {..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode({'submission_id': submissionId, 'grade': grade}),
+      body: jsonEncode({
+        'submission_id': submissionId,
+        'grade': grade,
+        if (feedback != null && feedback.trim().isNotEmpty)
+          'feedback': feedback.trim(),
+      }),
     );
     return Submission.fromJson(_decodeObject(response));
   }
@@ -462,7 +469,7 @@ class ApiService {
         return null;
       }
       throw ApiException(
-        'Server error (${response.statusCode}). Coba lagi nanti.',
+        'Kesalahan server (${response.statusCode}). Coba lagi nanti.',
       );
     }
 

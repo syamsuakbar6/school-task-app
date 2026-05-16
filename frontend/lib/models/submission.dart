@@ -15,6 +15,9 @@ class Submission {
     required this.downloadUrl,
     required this.status,
     required this.version,
+    required this.gradedBy,
+    required this.gradedAt,
+    required this.feedback,
     required this.task,
     required this.user,
   });
@@ -29,6 +32,9 @@ class Submission {
   final String? downloadUrl;
   final String? status;
   final int? version;
+  final AppUser? gradedBy;
+  final DateTime? gradedAt;
+  final String? feedback;
   final Task task;
   final AppUser user;
 
@@ -74,6 +80,11 @@ class Submission {
       downloadUrl: json['download_url'] as String?,
       status: json['status'] as String?,
       version: json['version'] as int?,
+      gradedBy: json['graded_by'] is Map<String, dynamic>
+          ? AppUser.fromJson(json['graded_by'] as Map<String, dynamic>)
+          : null,
+      gradedAt: DateTime.tryParse(json['graded_at'] as String? ?? ''),
+      feedback: json['feedback'] as String?,
       task: Task.fromJson(json['task'] as Map<String, dynamic>),
       user: AppUser.fromJson(json['user'] as Map<String, dynamic>),
     );

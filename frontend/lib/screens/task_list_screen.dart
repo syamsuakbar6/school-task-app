@@ -31,6 +31,8 @@ class TaskListScreen extends StatefulWidget {
 
 enum _TaskFilter { active, newTasks, submitted, graded, closed }
 
+enum _TeacherTaskScope { mine, classAll }
+
 class _TaskListScreenState extends State<TaskListScreen> {
   late Future<List<Task>> _tasksFuture;
   Future<List<Submission>>? _studentSubmissionsFuture;
@@ -41,6 +43,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   bool _showHiddenOnly = false;
   bool _studentClassesLoaded = false;
   bool _studentHasClass = true;
+  _TeacherTaskScope _teacherTaskScope = _TeacherTaskScope.mine;
 
   // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
@@ -77,10 +80,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _loadHiddenTaskIds() async {
     final prefs = await SharedPreferences.getInstance();
     final values = prefs.getStringList(_hiddenTasksKey()) ?? const <String>[];
-    _hiddenTaskIds = values
-        .map(int.tryParse)
-        .whereType<int>()
-        .toSet();
+    _hiddenTaskIds = values.map(int.tryParse).whereType<int>().toSet();
   }
 
   String _hiddenTasksKey() {
@@ -424,6 +424,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       ? 'Minta admin menambahkan akun kamu ke kelas agar tugas bisa muncul.'
                       : null,
                   showSubmissionStatus: true,
+                  teacherTaskScope: _TeacherTaskScope.classAll,
+                  currentTeacherId: null,
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
                   onRefresh: _reloadTasks,
                   onOpenTask: _openTaskDetail,
@@ -438,6 +440,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   onHiddenToggle: (value) {
                     setState(() => _showHiddenOnly = value);
                   },
+                  onTeacherScopeChanged: null,
                   searchController: _searchController,
                 );
               },
@@ -458,6 +461,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 ? 'Minta admin menambahkan akun guru ini ke kelas sebelum membuat atau melihat tugas.'
                 : null,
             showSubmissionStatus: false,
+            teacherTaskScope: _teacherTaskScope,
+            currentTeacherId: user?.id,
             submissionsByTaskId: const {},
             onRefresh: _reloadTasks,
             onOpenTask: _openTaskDetail,
@@ -468,6 +473,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
               setState(() => _searchQuery = value);
             },
             onHiddenToggle: null,
+            onTeacherScopeChanged: (scope) {
+              setState(() => _teacherTaskScope = scope);
+            },
             searchController: _searchController,
           );
         },
@@ -548,6 +556,8 @@ class _TaskListBody extends StatelessWidget {
     required this.emptyTitle,
     required this.emptyMessage,
     required this.showSubmissionStatus,
+    required this.teacherTaskScope,
+    required this.currentTeacherId,
     required this.submissionsByTaskId,
     required this.onRefresh,
     required this.onOpenTask,
@@ -556,6 +566,7 @@ class _TaskListBody extends StatelessWidget {
     required this.onFilterChanged,
     required this.onSearchChanged,
     required this.onHiddenToggle,
+    required this.onTeacherScopeChanged,
     required this.searchController,
   });
 
@@ -568,6 +579,8 @@ class _TaskListBody extends StatelessWidget {
   final String? emptyTitle;
   final String? emptyMessage;
   final bool showSubmissionStatus;
+  final _TeacherTaskScope teacherTaskScope;
+  final int? currentTeacherId;
   final Map<int, Submission> submissionsByTaskId;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Task task) onOpenTask;
@@ -576,6 +589,7 @@ class _TaskListBody extends StatelessWidget {
   final ValueChanged<_TaskFilter>? onFilterChanged;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<bool>? onHiddenToggle;
+  final ValueChanged<_TeacherTaskScope>? onTeacherScopeChanged;
   final TextEditingController searchController;
 
   @override
@@ -591,6 +605,13 @@ class _TaskListBody extends StatelessWidget {
       if (query.isNotEmpty) {
         final haystack = '${task.title} ${task.description}'.toLowerCase();
         if (!haystack.contains(query)) return false;
+      }
+
+      if (!showSubmissionStatus &&
+          teacherTaskScope == _TeacherTaskScope.mine &&
+          currentTeacherId != null &&
+          task.createdBy != currentTeacherId) {
+        return false;
       }
 
       if (!showSubmissionStatus) return true;
@@ -644,6 +665,8 @@ class _TaskListBody extends StatelessWidget {
                     onFilterChanged: onFilterChanged,
                     onSearchChanged: onSearchChanged,
                     onHiddenToggle: onHiddenToggle,
+                    teacherTaskScope: teacherTaskScope,
+                    onTeacherScopeChanged: onTeacherScopeChanged,
                   ),
                   const SizedBox(height: 14),
                   _TaskSummaryCard(
@@ -743,6 +766,8 @@ class _TaskControls extends StatelessWidget {
     required this.onFilterChanged,
     required this.onSearchChanged,
     required this.onHiddenToggle,
+    required this.teacherTaskScope,
+    required this.onTeacherScopeChanged,
   });
 
   final bool isStudent;
@@ -753,6 +778,8 @@ class _TaskControls extends StatelessWidget {
   final ValueChanged<_TaskFilter>? onFilterChanged;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<bool>? onHiddenToggle;
+  final _TeacherTaskScope teacherTaskScope;
+  final ValueChanged<_TeacherTaskScope>? onTeacherScopeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -841,8 +868,53 @@ class _TaskControls extends StatelessWidget {
               color: colorScheme.onSurfaceVariant,
             ),
           ),
+        ] else if (onTeacherScopeChanged != null) ...[
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _TeacherScopeChip(
+                  label: 'Tugas saya',
+                  selected: teacherTaskScope == _TeacherTaskScope.mine,
+                  onSelected: () =>
+                      onTeacherScopeChanged!(_TeacherTaskScope.mine),
+                ),
+                _TeacherScopeChip(
+                  label: 'Semua tugas kelas',
+                  selected: teacherTaskScope == _TeacherTaskScope.classAll,
+                  onSelected: () =>
+                      onTeacherScopeChanged!(_TeacherTaskScope.classAll),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
+    );
+  }
+}
+
+class _TeacherScopeChip extends StatelessWidget {
+  const _TeacherScopeChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+      ),
     );
   }
 }
