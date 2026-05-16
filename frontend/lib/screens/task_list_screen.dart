@@ -135,6 +135,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<List<Task>> _fetchAndCacheTasks() async {
     var tasks = await widget.session.api.fetchTasks(
       classId: _selectedClassId,
+      mineOnly: widget.session.user?.isTeacher == true
+          ? _teacherTaskScope == _TeacherTaskScope.mine
+          : null,
     );
 
     // Sort: tugas aktif di atas, lalu deadline terdekat.
@@ -475,6 +478,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
             onHiddenToggle: null,
             onTeacherScopeChanged: (scope) {
               setState(() => _teacherTaskScope = scope);
+              _load();
             },
             searchController: _searchController,
           );

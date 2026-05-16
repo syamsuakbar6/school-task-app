@@ -1,5 +1,8 @@
 .venv/
 .tmp/
+.env
+.env.*
+!.env.example
 __pycache__/
 app/**/__pycache__/
 backend\generate_hash.py

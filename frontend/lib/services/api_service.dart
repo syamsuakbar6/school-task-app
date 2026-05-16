@@ -1,7 +1,7 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/app_user.dart';
@@ -58,9 +58,6 @@ class ApiService {
               throw const ApiException('Koneksi timeout. Coba lagi.'),
         );
 
-    debugPrint('LOGIN STATUS: ${response.statusCode}');
-    debugPrint('LOGIN BODY: ${response.body}');
-
     final data = _decodeObject(response);
     final token = data['access_token'] as String?;
     if (token == null || token.isEmpty) {
@@ -103,21 +100,19 @@ class ApiService {
       Uri.parse('$baseUrl/classes'),
       headers: _headers,
     );
-    debugPrint('CLASSES STATUS: ${response.statusCode}');
-    debugPrint('CLASSES BODY: ${response.body}');
     return _decodeList(response);
   }
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
-  Future<List<Task>> fetchTasks({int? classId}) async {
+  Future<List<Task>> fetchTasks({int? classId, bool? mineOnly}) async {
     final uri = Uri.parse('$baseUrl/tasks').replace(
       queryParameters: {
         if (classId != null) 'class_id': classId.toString(),
+        if (mineOnly != null) 'mine_only': mineOnly.toString(),
       },
     );
     final response = await _client.get(uri, headers: _headers);
-    debugPrint('TASKS STATUS: ${response.statusCode}');
     return _decodeList(response).map((json) => Task.fromJson(json)).toList();
   }
 
@@ -157,16 +152,9 @@ class ApiService {
       },
     );
     final response = await _client.get(uri, headers: _headers);
-    debugPrint('SUBMISSIONS STATUS: ${response.statusCode}');
-    debugPrint('SUBMISSIONS RAW BODY: ${response.body}');
-
-    final submissions = _decodeList(response).map((json) {
-      debugPrint('SUBMISSION JSON KEYS: ${json.keys.toList()}');
-      return Submission.fromJson(json);
-    }).toList();
-
-    debugPrint('PARSED SUBMISSIONS LENGTH: ${submissions.length}');
-    return submissions;
+    return _decodeList(response)
+        .map((json) => Submission.fromJson(json))
+        .toList();
   }
 
   Future<DownloadedSubmissionFile> downloadSubmissionFile(
@@ -178,10 +166,8 @@ class ApiService {
     }
 
     final uri = _absoluteUri(downloadUrl);
-    debugPrint('DOWNLOAD FILE URL: $uri');
 
     final response = await _client.get(uri, headers: _headers);
-    debugPrint('DOWNLOAD FILE STATUS: ${response.statusCode}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _decode(response);
@@ -237,8 +223,6 @@ class ApiService {
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
-    debugPrint('SUBMISSION UPLOAD STATUS: ${response.statusCode}');
-    debugPrint('SUBMISSION UPLOAD RESPONSE BODY: ${response.body}');
     return response;
   }
 
@@ -312,9 +296,16 @@ class ApiService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> adminListClasses() async {
+  Future<List<Map<String, dynamic>>> adminListClasses({
+    bool includeArchived = false,
+  }) async {
+    final uri = Uri.parse('$baseUrl/admin/classes').replace(
+      queryParameters: {
+        if (includeArchived) 'include_archived': 'true',
+      },
+    );
     final response = await _client.get(
-      Uri.parse('$baseUrl/admin/classes'),
+      uri,
       headers: _headers,
     );
     return _decodeList(response);
@@ -328,6 +319,38 @@ class ApiService {
       Uri.parse('$baseUrl/admin/classes'),
       headers: {..._headers, 'Content-Type': 'application/json'},
       body: jsonEncode({'name': name, 'code': code}),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminUpdateClass({
+    required int classId,
+    String? name,
+    String? code,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/admin/classes/$classId'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        if (name != null) 'name': name,
+        if (code != null) 'code': code,
+      }),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminArchiveClass(int classId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/classes/$classId/archive'),
+      headers: _headers,
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminUnarchiveClass(int classId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/classes/$classId/unarchive'),
+      headers: _headers,
     );
     return _decodeObject(response);
   }

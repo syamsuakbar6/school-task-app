@@ -233,13 +233,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     final submissions = snapshot.data ?? [];
                     final currentUserSubmission =
                         submissions.isEmpty ? null : submissions.first;
-                    debugPrint(
-                      'STUDENT SUBMISSION STATUS: '
-                      'taskId=${task.id} '
-                      'state=${snapshot.connectionState} '
-                      'count=${submissions.length} '
-                      'submissionId=${currentUserSubmission?.id}',
-                    );
                     return _StudentSubmissionStatusCard(
                       isLoading:
                           snapshot.connectionState == ConnectionState.waiting,
@@ -295,12 +288,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     }
 
                     final submissions = snapshot.data ?? [];
-                    debugPrint(
-                      'SUBMISSIONS FUTURE BUILDER: '
-                      'state=${snapshot.connectionState} '
-                      'hasError=${snapshot.hasError} '
-                      'length=${submissions.length}',
-                    );
                     final gradedCount = submissions
                         .where((submission) => submission.grade != null)
                         .length;
@@ -377,14 +364,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                   builder: (context) {
                                     final submission =
                                         visibleSubmissions[index];
-                                    debugPrint(
-                                      'SUBMISSION COLUMN ITEM: '
-                                      'index=$index '
-                                      'id=${submission.id} '
-                                      'user=${submission.user.name} '
-                                      'file=${submission.fileName} '
-                                      'grade=${submission.grade}',
-                                    );
                                     return SubmissionListTile(
                                       key: ValueKey<int>(submission.id),
                                       submission: submission,
@@ -540,6 +519,11 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
         : DateFormat('d MMM yyyy HH:mm').format(
             submission!.submittedAt.toLocal(),
           );
+    final gradedAt = submission?.gradedAt == null
+        ? null
+        : DateFormat('d MMM yyyy HH:mm').format(
+            submission!.gradedAt!.toLocal(),
+          );
     final isSubmitted = submission != null;
     final color = isSubmitted
         ? Colors.green
@@ -584,7 +568,7 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
                     isLoading
                         ? 'Mohon tunggu.'
                         : isSubmitted
-                            ? 'Dikumpulkan pada $submittedAt'
+                            ? _statusDetail(submission!, submittedAt, gradedAt)
                             : taskIsClosed
                                 ? 'Deadline sudah lewat. Kamu tidak bisa mengumpulkan tugas ini lagi.'
                                 : 'Unggah pekerjaan sebelum deadline.',
@@ -592,6 +576,15 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (submission?.feedback?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Catatan: ${submission!.feedback!.trim()}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -599,6 +592,22 @@ class _StudentSubmissionStatusCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _statusDetail(
+    Submission submission,
+    String? submittedAt,
+    String? gradedAt,
+  ) {
+    if (submission.grade != null) {
+      final graderName = submission.gradedBy?.name.trim();
+      if (graderName != null && graderName.isNotEmpty && gradedAt != null) {
+        return 'Dinilai oleh $graderName pada $gradedAt';
+      }
+      if (gradedAt != null) return 'Dinilai pada $gradedAt';
+      return 'Nilai sudah tersedia.';
+    }
+    return 'Dikumpulkan pada $submittedAt';
   }
 }
 

@@ -17,6 +17,6 @@ class Grade(Base):
     feedback = Column(Text, nullable=True)
     graded_at = Column(DateTime, nullable=True, default=utc_now_naive)
 
-    submission = relationship("Submission")
+    submission = relationship("Submission", back_populates="grade_record")
     teacher = relationship("User")
 

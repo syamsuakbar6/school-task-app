@@ -20,6 +20,7 @@ class AdminClassesScreen extends StatefulWidget {
 
 class _AdminClassesScreenState extends State<AdminClassesScreen> {
   late Future<List<Map<String, dynamic>>> _classesFuture;
+  bool _showArchived = false;
 
   @override
   void initState() {
@@ -28,7 +29,9 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
   }
 
   void _load() {
-    _classesFuture = widget.session.api.adminListClasses();
+    _classesFuture = widget.session.api.adminListClasses(
+      includeArchived: _showArchived,
+    );
   }
 
   void _refresh() => setState(_load);
@@ -92,7 +95,8 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                     hintText: 'contoh: XRPL1',
                   ),
                   validator: (v) {
-                    if ((v ?? '').trim().isEmpty) return 'Kode kelas wajib diisi';
+                    if ((v ?? '').trim().isEmpty)
+                      return 'Kode kelas wajib diisi';
                     return null;
                   },
                 ),
@@ -147,13 +151,226 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     );
   }
 
+  Future<void> _renameClass(Map<String, dynamic> cls) async {
+    final nameController =
+        TextEditingController(text: cls['name'] as String? ?? '');
+    final codeController =
+        TextEditingController(text: cls['code'] as String? ?? '');
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+    String? error;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Ubah Kelas'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (error != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .errorContainer
+                          .withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nama Kelas',
+                    hintText: 'contoh: XI RPL 1',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().length < 3) {
+                      return 'Nama kelas minimal 3 karakter';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: codeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kode Kelas',
+                    hintText: 'contoh: XIRPL1',
+                  ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Kode kelas wajib diisi';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      try {
+                        await widget.session.api.adminUpdateClass(
+                          classId: cls['id'] as int,
+                          name: nameController.text.trim(),
+                          code: codeController.text.trim(),
+                        );
+                        if (context.mounted) Navigator.pop(context);
+                        _refresh();
+                        if (mounted) {
+                          AppFeedback.success(
+                            this.context,
+                            'Kelas berhasil diperbarui.',
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          error = e.toString();
+                          saving = false;
+                        });
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    nameController.dispose();
+    codeController.dispose();
+  }
+
+  Future<void> _archiveClass(Map<String, dynamic> cls) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Arsipkan Kelas'),
+        content: Text(
+          'Arsipkan kelas ${cls['name']}? Kelas tidak muncul lagi untuk guru dan siswa, tetapi tugas dan pengumpulan tetap tersimpan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.archive_outlined),
+            label: const Text('Arsipkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await widget.session.api.adminArchiveClass(cls['id'] as int);
+      _refresh();
+      if (mounted) {
+        AppFeedback.success(context, '${cls['name']} diarsipkan.');
+      }
+    } catch (e) {
+      if (mounted) AppFeedback.error(context, e.toString());
+    }
+  }
+
+  Future<void> _unarchiveClass(Map<String, dynamic> cls) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pulihkan Kelas'),
+        content: Text(
+          'Pulihkan kelas ${cls['name']} agar bisa dipakai lagi oleh guru dan siswa?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.unarchive_outlined),
+            label: const Text('Pulihkan'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await widget.session.api.adminUnarchiveClass(cls['id'] as int);
+      _refresh();
+      if (mounted) {
+        AppFeedback.success(context, '${cls['name']} dipulihkan.');
+      }
+    } catch (e) {
+      if (mounted) AppFeedback.error(context, e.toString());
+    }
+  }
+
   Future<void> _deleteClass(Map<String, dynamic> cls) async {
+    final taskCount = cls['task_count'] as int? ?? 0;
+    final submissionCount = cls['submission_count'] as int? ?? 0;
+    if (taskCount > 0 || submissionCount > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Kelas tidak bisa dihapus'),
+          content: Text(
+            'Kelas ${cls['name']} masih memiliki $taskCount tugas dan '
+            '$submissionCount pengumpulan. Data akademik ini perlu tetap aman.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus Kelas'),
         content: Text(
-          'Hapus kelas ${cls['name']}? Semua siswa akan dikeluarkan dari kelas ini.',
+          'Hapus kelas ${cls['name']}? Kelas kosong ini akan dihapus dan relasi siswa/guru di kelas ini akan dilepas.',
         ),
         actions: [
           TextButton(
@@ -198,6 +415,16 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
       appBar: AppBar(
         title: const Text('Kelola Kelas'),
         actions: [
+          TextButton.icon(
+            onPressed: () {
+              setState(() => _showArchived = !_showArchived);
+              _refresh();
+            },
+            icon: Icon(
+              _showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+            ),
+            label: Text(_showArchived ? 'Semua kelas' : 'Kelas aktif'),
+          ),
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),
@@ -236,7 +463,14 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
               final cls = classes[index];
               final students = cls['students'] as List? ?? [];
               final teachers = cls['teachers'] as List? ?? [];
+              final taskCount = cls['task_count'] as int? ?? 0;
+              final submissionCount = cls['submission_count'] as int? ?? 0;
+              final isArchived = cls['is_archived'] as bool? ?? false;
+              final canDelete = taskCount == 0 && submissionCount == 0;
               return Card(
+                color: isArchived
+                    ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+                    : null,
                 margin: const EdgeInsets.only(bottom: 12),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -269,6 +503,10 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
+                            if (isArchived) ...[
+                              const _ArchivedChip(),
+                              const SizedBox(height: 6),
+                            ],
                             Text(
                               'Kode: ${cls['code'] ?? '-'}',
                               maxLines: 1,
@@ -289,6 +527,14 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                 _CountChip(
                                   icon: Icons.school_outlined,
                                   label: '${teachers.length} guru',
+                                ),
+                                _CountChip(
+                                  icon: Icons.assignment_outlined,
+                                  label: '$taskCount tugas',
+                                ),
+                                _CountChip(
+                                  icon: Icons.upload_file_outlined,
+                                  label: '$submissionCount pengumpulan',
                                 ),
                               ],
                             ),
@@ -317,12 +563,16 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                     size: 18,
                                   ),
                                   label: const Text('Siswa'),
-                                  onPressed: () => Navigator.of(context).push(
-                                    appPageRoute(AdminAssignScreen(
-                                      session: widget.session,
-                                      classData: cls,
-                                    )),
-                                  ).then((_) => _refresh()),
+                                  onPressed: isArchived
+                                      ? null
+                                      : () => Navigator.of(context)
+                                          .push(
+                                            appPageRoute(AdminAssignScreen(
+                                              session: widget.session,
+                                              classData: cls,
+                                            )),
+                                          )
+                                          .then((_) => _refresh()),
                                 ),
                                 OutlinedButton.icon(
                                   icon: Icon(
@@ -331,20 +581,56 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                                     size: 18,
                                   ),
                                   label: const Text('Guru'),
-                                  onPressed: () => Navigator.of(context).push(
-                                    appPageRoute(AdminAssignTeachersScreen(
-                                      session: widget.session,
-                                      classData: cls,
-                                    )),
-                                  ).then((_) => _refresh()),
+                                  onPressed: isArchived
+                                      ? null
+                                      : () => Navigator.of(context)
+                                          .push(
+                                            appPageRoute(
+                                                AdminAssignTeachersScreen(
+                                              session: widget.session,
+                                              classData: cls,
+                                            )),
+                                          )
+                                          .then((_) => _refresh()),
                                 ),
                                 OutlinedButton.icon(
                                   icon: Icon(
-                                    Icons.delete_outline,
-                                    color: colorScheme.error,
+                                    Icons.edit_outlined,
+                                    color: isArchived
+                                        ? colorScheme.onSurfaceVariant
+                                        : colorScheme.primary,
                                     size: 18,
                                   ),
-                                  label: const Text('Hapus'),
+                                  label: const Text('Ubah'),
+                                  onPressed: isArchived
+                                      ? null
+                                      : () => _renameClass(cls),
+                                ),
+                                OutlinedButton.icon(
+                                  icon: Icon(
+                                    isArchived
+                                        ? Icons.unarchive_outlined
+                                        : Icons.archive_outlined,
+                                    color: colorScheme.secondary,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                      isArchived ? 'Pulihkan' : 'Arsipkan'),
+                                  onPressed: () => isArchived
+                                      ? _unarchiveClass(cls)
+                                      : _archiveClass(cls),
+                                ),
+                                OutlinedButton.icon(
+                                  icon: Icon(
+                                    canDelete
+                                        ? Icons.delete_outline
+                                        : Icons.lock_outline,
+                                    color: canDelete
+                                        ? colorScheme.error
+                                        : colorScheme.onSurfaceVariant,
+                                    size: 18,
+                                  ),
+                                  label: Text(canDelete ? 'Hapus' : 'Terkunci'),
                                   onPressed: () => _deleteClass(cls),
                                 ),
                               ],
@@ -409,6 +695,47 @@ class _CountChip extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArchivedChip extends StatelessWidget {
+  const _ArchivedChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 14,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Diarsipkan',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );

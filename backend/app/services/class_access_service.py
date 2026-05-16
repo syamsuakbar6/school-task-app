@@ -58,7 +58,10 @@ class ClassAccessService:
         row = db.execute(
             text(
                 "SELECT 1 FROM teacher_class_assignments "
-                "WHERE class_id = :class_id AND teacher_id = :teacher_id LIMIT 1"
+                "JOIN classes ON classes.id = teacher_class_assignments.class_id "
+                "WHERE teacher_class_assignments.class_id = :class_id "
+                "AND teacher_class_assignments.teacher_id = :teacher_id "
+                "AND COALESCE(classes.is_archived, FALSE) = FALSE LIMIT 1"
             ),
             {"class_id": class_id, "teacher_id": teacher_id},
         ).first()
@@ -69,7 +72,10 @@ class ClassAccessService:
         row = db.execute(
             text(
                 "SELECT 1 FROM class_memberships "
-                "WHERE class_id = :class_id AND student_id = :student_id LIMIT 1"
+                "JOIN classes ON classes.id = class_memberships.class_id "
+                "WHERE class_memberships.class_id = :class_id "
+                "AND class_memberships.student_id = :student_id "
+                "AND COALESCE(classes.is_archived, FALSE) = FALSE LIMIT 1"
             ),
             {"class_id": class_id, "student_id": student_id},
         ).first()
@@ -145,8 +151,10 @@ class ClassAccessService:
     def get_teacher_class_ids(db: Session, *, teacher_id: int) -> list[int]:
         rows = db.execute(
             text(
-                "SELECT class_id FROM teacher_class_assignments "
-                "WHERE teacher_id = :teacher_id"
+                "SELECT teacher_class_assignments.class_id FROM teacher_class_assignments "
+                "JOIN classes ON classes.id = teacher_class_assignments.class_id "
+                "WHERE teacher_class_assignments.teacher_id = :teacher_id "
+                "AND COALESCE(classes.is_archived, FALSE) = FALSE"
             ),
             {"teacher_id": teacher_id},
         ).all()
@@ -155,7 +163,12 @@ class ClassAccessService:
     @staticmethod
     def get_student_class_ids(db: Session, *, student_id: int) -> list[int]:
         rows = db.execute(
-            text("SELECT class_id FROM class_memberships WHERE student_id = :student_id"),
+            text(
+                "SELECT class_memberships.class_id FROM class_memberships "
+                "JOIN classes ON classes.id = class_memberships.class_id "
+                "WHERE class_memberships.student_id = :student_id "
+                "AND COALESCE(classes.is_archived, FALSE) = FALSE"
+            ),
             {"student_id": student_id},
         ).all()
         return sorted({int(row[0]) for row in rows})
@@ -178,6 +191,7 @@ class ClassAccessService:
                     TeacherClassAssignment.class_id == Class.id,
                 )
                 .where(TeacherClassAssignment.teacher_id == current_user.id)
+                .where(Class.is_archived.is_(False))
             )
 
         return (
@@ -187,6 +201,7 @@ class ClassAccessService:
                 ClassMembership.class_id == Class.id,
             )
             .where(ClassMembership.student_id == current_user.id)
+            .where(Class.is_archived.is_(False))
         )
 
     @staticmethod

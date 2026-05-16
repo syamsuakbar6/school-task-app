@@ -23,16 +23,6 @@ class SubmissionListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-      'BUILD SUBMISSION TILE: '
-      'id=${submission.id} '
-      'user="${submission.user.name}" '
-      'file="${submission.fileName}" '
-      'downloadUrl="${submission.downloadUrl}" '
-      'grade=${submission.grade} '
-      'hasFile=${submission.hasFile}',
-    );
-
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final submittedAt = DateFormat(

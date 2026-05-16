@@ -1,11 +1,13 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+DEV_SECRET_KEY = "development-only-change-this-to-a-long-random-secret"
 
 
 class Settings(BaseSettings):
@@ -24,9 +26,7 @@ class Settings(BaseSettings):
         "postgresql+psycopg2://postgres:postgres@localhost:5432/school_task_db"
     )
 
-    SECRET_KEY: str = (
-        "0a8!+oey9@@d#*k$)xb$3hj3fx-aojmy2kunry39vg+qkmb3m9"
-    )
+    SECRET_KEY: str = DEV_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -49,6 +49,13 @@ class Settings(BaseSettings):
         if len(value) < 32:
             raise ValueError("SECRET_KEY must be at least 32 characters long.")
         return value
+
+    @model_validator(mode="after")
+    def validate_production_secret_key(self) -> "Settings":
+        running_on_railway = any(key.startswith("RAILWAY_") for key in os.environ)
+        if running_on_railway and self.SECRET_KEY == DEV_SECRET_KEY:
+            raise ValueError("SECRET_KEY wajib diisi di Railway environment.")
+        return self
 
     @property
     def cors_origins(self) -> list[str]:

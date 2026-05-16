@@ -17,6 +17,7 @@ class SubmissionCreate(BaseModel):
 class SubmissionGradeRequest(BaseModel):
     submission_id: int
     grade: int
+    feedback: str | None = Field(default=None, max_length=2000)
 
 
 class SubmissionResponse(BaseModel):
@@ -32,6 +33,9 @@ class SubmissionResponse(BaseModel):
     download_url: str | None
     status: str | None
     version: int | None
+    graded_by: UserSummary | None
+    graded_at: datetime | None
+    feedback: str | None
     task: TaskSummary
     user: UserSummary
 
@@ -58,6 +62,13 @@ class SubmissionResponse(BaseModel):
             download_url=download_url,
             status=submission.status,
             version=submission.version,
+            graded_by=(
+                UserSummary.model_validate(submission.grade_record.teacher)
+                if submission.grade_record and submission.grade_record.teacher
+                else None
+            ),
+            graded_at=submission.grade_record.graded_at if submission.grade_record else None,
+            feedback=submission.grade_record.feedback if submission.grade_record else None,
             task=TaskSummary.from_task(submission.task),
             user=UserSummary.model_validate(submission.user),
         )

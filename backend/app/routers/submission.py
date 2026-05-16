@@ -98,5 +98,6 @@ def grade_submission(
         submission_id=payload.submission_id,
         grade=payload.grade,
         teacher=current_teacher,
+        feedback=payload.feedback,
     )
     return SubmissionResponse.from_submission(submission)

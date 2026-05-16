@@ -23,11 +23,9 @@ class AuthSession extends ChangeNotifier {
     try {
       api.setToken(storedToken);
       user = await api.currentUser();
-      debugPrint('AUTH SESSION RESTORED: ${user?.name}, role=${user?.role}');
       notifyListeners();
       return true;
     } catch (error) {
-      debugPrint('AUTH SESSION RESTORE FAILED: $error');
       user = null;
       api.clearToken();
       await _tokenStore.clearToken();
@@ -51,7 +49,6 @@ class AuthSession extends ChangeNotifier {
     }
 
     user = loggedInUser;
-    debugPrint('AUTH SESSION: user=${user?.name}, role=${user?.role}');
     notifyListeners();
   }
 

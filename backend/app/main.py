@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.error_handlers import register_error_handlers
-from app.db.database import check_database_connection, get_db
+from app.db.database import check_database_connection, ensure_production_schema, get_db
 from app.routers import auth, class_router, submission, task, admin
 
 # TAMBAHKAN INI — pastikan semua model ter-register ke SQLAlchemy
@@ -22,6 +22,7 @@ import app.models.submission_state  # noqa: F401
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    ensure_production_schema()
     settings.storage_path.mkdir(parents=True, exist_ok=True)
     yield
 

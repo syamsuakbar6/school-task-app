@@ -56,6 +56,7 @@ class TaskService:
         *,
         current_user: User,
         class_id: int | None = None,
+        mine_only: bool = False,
     ) -> list[Task]:
         statement = (
             select(Task)
@@ -81,6 +82,9 @@ class TaskService:
         else:
             # Tampilkan semua task dari semua kelas yang accessible
             statement = statement.where(Task.class_id.in_(class_ids))
+
+        if mine_only and ClassAccessService.normalize_role(current_user.role) == UserRole.TEACHER.value:
+            statement = statement.where(Task.created_by == current_user.id)
 
         return list(db.scalars(statement).all())
 

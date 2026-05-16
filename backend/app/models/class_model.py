@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -16,6 +16,8 @@ class Class(Base):
     # Legacy column kept for schema compatibility only; access control must use teacher_class_assignments.
     teacher_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=True, default=utc_now_naive)
+    is_archived = Column(Boolean, nullable=False, default=False, index=True)
+    archived_at = Column(DateTime, nullable=True)
 
     teacher = relationship("User")
 

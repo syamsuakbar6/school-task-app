@@ -18,7 +18,7 @@ class GradingService:
     @staticmethod
     def can_grade_submission(db: Session, *, teacher: User, submission: Submission) -> bool:
         class_id = ClassAccessService.get_submission_access_class_id(submission)
-        return ClassAccessService.is_teacher_assigned(
+        return submission.task.created_by == teacher.id and ClassAccessService.is_teacher_assigned(
             db,
             teacher_id=teacher.id,
             class_id=class_id,
@@ -41,7 +41,14 @@ class GradingService:
         )
 
     @staticmethod
-    def grade_submission(db: Session, *, submission_id: int, grade: int, teacher: User) -> Submission:
+    def grade_submission(
+        db: Session,
+        *,
+        submission_id: int,
+        grade: int,
+        teacher: User,
+        feedback: str | None = None,
+    ) -> Submission:
         # Grading rules owner: GradingService
         ClassAccessService.assert_user_role(
             teacher,
@@ -77,6 +84,11 @@ class GradingService:
             teacher_id=teacher.id,
             class_id=class_id,
         )
+        if submission.task.created_by != teacher.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Hanya guru pembuat tugas yang bisa memberi nilai.",
+            )
 
         existing_grade = db.scalar(select(Grade).where(Grade.submission_id == submission.id))
         if existing_grade is not None:
@@ -106,7 +118,7 @@ class GradingService:
             submission_id=submission.id,
             teacher_id=teacher.id,
             score=grade,
-            feedback=None,
+            feedback=feedback.strip() if feedback and feedback.strip() else None,
             graded_at=now_utc,
         )
         db.add(grade_row)

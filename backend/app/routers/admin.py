@@ -1,4 +1,5 @@
 from io import BytesIO
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy import select, delete, func
@@ -45,6 +46,11 @@ class CreateClassRequest(BaseModel):
     code: str = Field(min_length=1, max_length=20)
 
 
+class UpdateClassRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=100)
+    code: str | None = Field(default=None, min_length=1, max_length=20)
+
+
 class StudentResponse(BaseModel):
     id: int
     name: str
@@ -70,6 +76,8 @@ class ClassResponse(BaseModel):
     name: str
     code: str | None
     teacher_id: int | None = None
+    is_archived: bool = False
+    archived_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -81,6 +89,10 @@ class ClassWithStudentsResponse(BaseModel):
     code: str | None
     students: list[StudentResponse] = Field(default_factory=list)
     teachers: list[TeacherResponse] = Field(default_factory=list)
+    task_count: int = 0
+    submission_count: int = 0
+    is_archived: bool = False
+    archived_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -190,8 +202,12 @@ def delete_user(
 def list_all_classes(
     db: DBSession,
     _: User = Depends(require_admin),
+    include_archived: bool = False,
 ) -> list[ClassWithStudentsResponse]:
-    classes = db.scalars(select(Class).order_by(Class.created_at.desc())).all()
+    statement = select(Class).order_by(Class.is_archived.asc(), Class.created_at.desc())
+    if not include_archived:
+        statement = statement.where(Class.is_archived.is_(False))
+    classes = db.scalars(statement).all()
     result = []
     for c in classes:
         memberships = db.scalars(
@@ -212,12 +228,22 @@ def list_all_classes(
             teachers = db.scalars(
                 select(User).where(User.id.in_(teacher_ids))
             ).all()
+        task_count = db.scalar(
+            select(func.count()).select_from(Task).where(Task.class_id == c.id)
+        ) or 0
+        submission_count = db.scalar(
+            select(func.count()).select_from(Submission).where(Submission.class_id == c.id)
+        ) or 0
         result.append(ClassWithStudentsResponse(
             id=c.id,
             name=c.name,
             code=c.code,
             students=[StudentResponse.model_validate(s) for s in students],
             teachers=[TeacherResponse.model_validate(t) for t in teachers],
+            task_count=task_count,
+            submission_count=submission_count,
+            is_archived=bool(c.is_archived),
+            archived_at=c.archived_at,
         ))
     return result
 
@@ -228,7 +254,10 @@ def create_class(
     db: DBSession,
     current_admin: User = Depends(require_admin),
 ) -> ClassResponse:
-    existing = db.scalar(select(Class).where(Class.code == payload.code))
+    normalized_name = _normalize_class_name(payload.name)
+    normalized_code = payload.code.strip().upper()
+    _assert_active_class_name_available(db, normalized_name=normalized_name)
+    existing = db.scalar(select(Class).where(Class.code == normalized_code))
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -236,14 +265,127 @@ def create_class(
         )
 
     new_class = Class(
-        name=payload.name.strip(),
-        code=payload.code.strip().upper(),
+        name=normalized_name,
+        code=normalized_code,
         teacher_id=current_admin.id,
     )
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
     return ClassResponse.model_validate(new_class)
+
+
+@router.patch("/classes/{class_id}", response_model=ClassResponse)
+def update_class(
+    class_id: int,
+    payload: UpdateClassRequest,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> ClassResponse:
+    cls = _get_class_or_404(db, class_id=class_id)
+    if cls.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kelas arsip harus dipulihkan sebelum diubah.",
+        )
+
+    if payload.name is not None:
+        normalized_name = _normalize_class_name(payload.name)
+        if normalized_name.lower() != cls.name.lower():
+            _assert_active_class_name_available(
+                db,
+                normalized_name=normalized_name,
+                exclude_class_id=class_id,
+            )
+        cls.name = normalized_name
+
+    if payload.code is not None:
+        normalized_code = payload.code.strip().upper()
+        if normalized_code != (cls.code or "").upper():
+            existing = db.scalar(
+                select(Class).where(Class.code == normalized_code, Class.id != class_id)
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Kode kelas sudah digunakan.",
+                )
+        cls.code = normalized_code
+
+    db.add(cls)
+    db.commit()
+    db.refresh(cls)
+    return ClassResponse.model_validate(cls)
+
+
+@router.post("/classes/{class_id}/archive", response_model=ClassResponse)
+def archive_class(
+    class_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> ClassResponse:
+    cls = _get_class_or_404(db, class_id=class_id)
+    if not cls.is_archived:
+        cls.is_archived = True
+        cls.archived_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.add(cls)
+        db.commit()
+        db.refresh(cls)
+    return ClassResponse.model_validate(cls)
+
+
+@router.post("/classes/{class_id}/unarchive", response_model=ClassResponse)
+def unarchive_class(
+    class_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> ClassResponse:
+    cls = _get_class_or_404(db, class_id=class_id)
+    _assert_active_class_name_available(
+        db,
+        normalized_name=cls.name,
+        exclude_class_id=class_id,
+    )
+    cls.is_archived = False
+    cls.archived_at = None
+    db.add(cls)
+    db.commit()
+    db.refresh(cls)
+    return ClassResponse.model_validate(cls)
+
+
+def _get_class_or_404(db: Session, *, class_id: int) -> Class:
+    cls = db.scalar(select(Class).where(Class.id == class_id))
+    if cls is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kelas tidak ditemukan.",
+        )
+    return cls
+
+
+def _normalize_class_name(value: str) -> str:
+    return " ".join(value.strip().split())
+
+
+def _assert_active_class_name_available(
+    db: Session,
+    *,
+    normalized_name: str,
+    exclude_class_id: int | None = None,
+) -> None:
+    statement = select(Class).where(
+        func.lower(Class.name) == normalized_name.lower(),
+        Class.is_archived.is_(False),
+    )
+    if exclude_class_id is not None:
+        statement = statement.where(Class.id != exclude_class_id)
+    existing = db.scalar(statement)
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nama kelas sudah digunakan.",
+        )
 
 
 @router.delete("/classes/{class_id}", status_code=status.HTTP_204_NO_CONTENT)

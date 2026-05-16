@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.grade import Grade
 from app.models.submission import Submission
 from app.models.task import Task
 from app.models.user import User, UserRole
@@ -66,6 +67,7 @@ class SubmissionService:
             .options(
                 joinedload(Submission.task),
                 joinedload(Submission.user),
+                joinedload(Submission.grade_record).joinedload(Grade.teacher),
             )
             .where(Submission.class_id == Task.class_id)
             .order_by(Submission.submitted_at.desc())
@@ -106,7 +108,7 @@ class SubmissionService:
             if student_id is not None and student_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Students can only view their own submissions.",
+                    detail="Siswa hanya bisa melihat pengumpulan miliknya sendiri.",
                 )
             statement = statement.where(Submission.user_id == current_user.id)
         else:
@@ -295,12 +297,14 @@ class SubmissionService:
         submission_id: int,
         grade: int,
         teacher: User,
+        feedback: str | None = None,
     ) -> Submission:
         submission = GradingService.grade_submission(
             db,
             submission_id=submission_id,
             grade=grade,
             teacher=teacher,
+            feedback=feedback,
         )
         return SubmissionService._fetch_submission_or_404(db, submission.id)
 
@@ -311,6 +315,7 @@ class SubmissionService:
             .options(
                 joinedload(Submission.task),
                 joinedload(Submission.user),
+                joinedload(Submission.grade_record).joinedload(Grade.teacher),
             )
             .where(Submission.id == submission_id)
         )

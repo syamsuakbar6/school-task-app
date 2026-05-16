@@ -3,7 +3,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import text, create_engine
+from sqlalchemy import inspect, text, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker, configure_mappers
 
 
@@ -53,6 +53,30 @@ def check_database_connection(db: Session) -> dict[str, int | str]:
         "database": "connected",
         "users_count": int(users_count),
     }
+
+
+def ensure_production_schema() -> None:
+    """
+    Lightweight forward-only schema guard for deployments without Alembic.
+    Safe to run repeatedly during Railway startup.
+    """
+    inspector = inspect(engine)
+    existing_columns = {column["name"] for column in inspector.get_columns("classes")}
+    with engine.begin() as connection:
+        if "is_archived" not in existing_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE classes "
+                    "ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE"
+                )
+            )
+        if "archived_at" not in existing_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE classes "
+                    "ADD COLUMN archived_at TIMESTAMP NULL"
+                )
+            )
 
 
 # Import all models to register them with Base metadata

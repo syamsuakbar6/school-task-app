@@ -5,7 +5,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _kTasksCacheKey = 'cached_tasks_for_notification';
+const _kDeadlineNotificationStateKey = 'deadline_notification_state';
 const _kDeadlineWarningHours = 24;
+const _kDeadlineCooldownHours = 6;
 
 class NotificationService {
   NotificationService._();
@@ -13,7 +15,8 @@ class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
 
   static Future<void> init() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _plugin.initialize(
@@ -78,6 +81,7 @@ class NotificationService {
   static Future<void> cacheTasks(List<Map<String, dynamic>> tasks) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kTasksCacheKey, jsonEncode(tasks));
+    await _cleanupInactiveDeadlineNotifications(prefs, tasks);
     debugPrint('NotificationService: cached ${tasks.length} tasks');
   }
 
@@ -100,10 +104,15 @@ class NotificationService {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final notificationState = _decodeNotificationState(
+      prefs.getString(_kDeadlineNotificationStateKey),
+    );
     final now = DateTime.now().toUtc();
     final warningThreshold = now.add(
       const Duration(hours: _kDeadlineWarningHours),
     );
+    final activeTaskIds = <String>{};
 
     var notifCount = 0;
 
@@ -116,17 +125,22 @@ class NotificationService {
 
       if (deadlineStr == null || submitted || hidden || taskId == null) {
         await _plugin.cancel(taskId ?? 0);
+        if (taskId != null) notificationState.remove(taskId.toString());
         continue;
       }
+      final taskKey = taskId.toString();
+      activeTaskIds.add(taskKey);
 
       final deadline = DateTime.tryParse(deadlineStr)?.toUtc();
       if (deadline == null) continue;
 
       if (deadline.isBefore(now)) {
         await _plugin.cancel(taskId);
+        notificationState.remove(taskKey);
         continue;
       }
       if (deadline.isAfter(warningThreshold)) continue;
+      if (!_canSendDeadlineWarning(notificationState[taskKey], now)) continue;
 
       final difference = deadline.difference(now);
       final hoursLeft = difference.inHours;
@@ -143,9 +157,64 @@ class NotificationService {
         taskTitle: taskTitle,
         deadlineText: deadlineText,
       );
+      notificationState[taskKey] = now.toIso8601String();
       notifCount++;
     }
 
+    notificationState
+        .removeWhere((taskId, _) => !activeTaskIds.contains(taskId));
+    await prefs.setString(
+      _kDeadlineNotificationStateKey,
+      jsonEncode(notificationState),
+    );
     debugPrint('NotificationService: sent $notifCount deadline notifications');
+  }
+
+  static bool _canSendDeadlineWarning(String? lastSentRaw, DateTime now) {
+    if (lastSentRaw == null || lastSentRaw.isEmpty) return true;
+    final lastSentAt = DateTime.tryParse(lastSentRaw)?.toUtc();
+    if (lastSentAt == null) return true;
+    return now.difference(lastSentAt) >=
+        const Duration(hours: _kDeadlineCooldownHours);
+  }
+
+  static Map<String, String> _decodeNotificationState(String? raw) {
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return {};
+      return decoded.map((key, value) => MapEntry(key, value.toString()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> _cleanupInactiveDeadlineNotifications(
+    SharedPreferences prefs,
+    List<Map<String, dynamic>> tasks,
+  ) async {
+    final notificationState = _decodeNotificationState(
+      prefs.getString(_kDeadlineNotificationStateKey),
+    );
+    var changed = false;
+
+    for (final task in tasks) {
+      final taskId = task['id'] as int?;
+      if (taskId == null) continue;
+      final submitted = task['submitted'] as bool? ?? false;
+      final hidden = task['hidden'] as bool? ?? false;
+      final deadlineStr = task['deadline'] as String?;
+      if (!submitted && !hidden && deadlineStr != null) continue;
+
+      await _plugin.cancel(taskId);
+      changed = notificationState.remove(taskId.toString()) != null || changed;
+    }
+
+    if (changed) {
+      await prefs.setString(
+        _kDeadlineNotificationStateKey,
+        jsonEncode(notificationState),
+      );
+    }
   }
 }

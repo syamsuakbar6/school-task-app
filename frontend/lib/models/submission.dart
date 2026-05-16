@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'app_user.dart';
 import 'task.dart';
 
@@ -60,15 +58,6 @@ class Submission {
   }
 
   factory Submission.fromJson(Map<String, dynamic> json) {
-    debugPrint('PARSING SUBMISSION: id=${json['id']} '
-        'task_id=${json['task_id']} '
-        'user_id=${json['user_id']} '
-        'file_name=${json['file_name']} '
-        'download_url=${json['download_url']} '
-        'status=${json['status']} '
-        'has_task=${json['task'] != null} '
-        'has_user=${json['user'] != null}');
-
     return Submission(
       id: json['id'] as int,
       taskId: json['task_id'] as int,

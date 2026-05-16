@@ -11,3 +11,5 @@ class ClassResponse(BaseModel):
     code: str | None
     teacher_id: int
     created_at: datetime | None
+    is_archived: bool = False
+    archived_at: datetime | None = None

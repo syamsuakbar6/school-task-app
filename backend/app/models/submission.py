@@ -20,3 +20,4 @@ class Submission(Base):
 
     user = relationship("User", back_populates="submissions")
     task = relationship("Task", back_populates="submissions")
+    grade_record = relationship("Grade", back_populates="submission", uselist=False)

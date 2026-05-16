@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import io
-
 import pytest
 from fastapi import HTTPException
 
@@ -27,7 +25,12 @@ class _UploadFile:
 @pytest.mark.asyncio
 async def test_submit_task_success(db, student, open_task, membership):
     upload = _UploadFile("a.pdf", b"hello")
-    submission = await SubmissionService.submit_task(db, task_id=open_task.id, student=student, file=upload)
+    submission = await SubmissionService.submit_task(
+        db,
+        task_id=open_task.id,
+        student=student,
+        file=upload,
+    )
     assert submission.id > 0
     assert submission.task_id == open_task.id
     assert submission.user_id == student.id
@@ -37,11 +40,21 @@ async def test_submit_task_success(db, student, open_task, membership):
 @pytest.mark.asyncio
 async def test_resubmit_allowed_before_graded(db, student, open_task, membership):
     upload1 = _UploadFile("a.pdf", b"hello")
-    first = await SubmissionService.submit_task(db, task_id=open_task.id, student=student, file=upload1)
+    first = await SubmissionService.submit_task(
+        db,
+        task_id=open_task.id,
+        student=student,
+        file=upload1,
+    )
     first_path = first.file_path
 
     upload2 = _UploadFile("b.pdf", b"changed")
-    second = await SubmissionService.submit_task(db, task_id=open_task.id, student=student, file=upload2)
+    second = await SubmissionService.submit_task(
+        db,
+        task_id=open_task.id,
+        student=student,
+        file=upload2,
+    )
 
     # Should replace, not create a new submission row
     assert second.id == first.id
@@ -51,7 +64,12 @@ async def test_resubmit_allowed_before_graded(db, student, open_task, membership
 @pytest.mark.asyncio
 async def test_resubmit_blocked_after_graded(db, student, teacher, open_task, membership):
     upload1 = _UploadFile("a.pdf", b"hello")
-    submission = await SubmissionService.submit_task(db, task_id=open_task.id, student=student, file=upload1)
+    submission = await SubmissionService.submit_task(
+        db,
+        task_id=open_task.id,
+        student=student,
+        file=upload1,
+    )
 
     SubmissionService.grade_submission(db, submission_id=submission.id, grade=80, teacher=teacher)
 
@@ -65,19 +83,43 @@ async def test_resubmit_blocked_after_graded(db, student, teacher, open_task, me
 async def test_deadline_rejection(db, student, expired_task):
     upload = _UploadFile("a.pdf", b"late")
     with pytest.raises(HTTPException) as exc:
-        await SubmissionService.submit_task(db, task_id=expired_task.id, student=student, file=upload)
+        await SubmissionService.submit_task(
+            db,
+            task_id=expired_task.id,
+            student=student,
+            file=upload,
+        )
     assert exc.value.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_grading_success_and_blocked_regrade(db, student, teacher, open_task, membership):
     upload = _UploadFile("a.pdf", b"hello")
-    submission = await SubmissionService.submit_task(db, task_id=open_task.id, student=student, file=upload)
+    submission = await SubmissionService.submit_task(
+        db,
+        task_id=open_task.id,
+        student=student,
+        file=upload,
+    )
 
-    graded = SubmissionService.grade_submission(db, submission_id=submission.id, grade=90, teacher=teacher)
+    graded = SubmissionService.grade_submission(
+        db,
+        submission_id=submission.id,
+        grade=90,
+        teacher=teacher,
+        feedback="Bagus, lanjutkan.",
+    )
     assert graded.grade == 90
+    assert graded.grade_record.teacher_id == teacher.id
+    assert graded.grade_record.feedback == "Bagus, lanjutkan."
+    assert graded.grade_record.graded_at is not None
 
     with pytest.raises(HTTPException) as exc:
-        SubmissionService.grade_submission(db, submission_id=submission.id, grade=95, teacher=teacher)
+        SubmissionService.grade_submission(
+            db,
+            submission_id=submission.id,
+            grade=95,
+            teacher=teacher,
+        )
     assert exc.value.status_code == 409
 
