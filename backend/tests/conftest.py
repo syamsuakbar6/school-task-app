@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 from app.db.database import Base
 from app.models.audit_log import AuditLog
-from app.models.class_model import Class, ClassMembership, TeacherClassAssignment
+from app.models.class_model import AcademicYear, Class, ClassMembership, TeacherClassAssignment
 from app.models.grade import Grade
 from app.models.submission import Submission
 from app.models.task import Task
@@ -22,6 +22,11 @@ from app.utils.datetime_utils import utc_now_naive
 def local_file_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "STORAGE_BACKEND", "local")
     monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "submissions"))
+
+
+@pytest.fixture(autouse=True)
+def skip_production_schema_guard(monkeypatch):
+    monkeypatch.setattr("app.main.ensure_production_schema", lambda: None)
 
 
 @pytest.fixture()
@@ -39,7 +44,17 @@ def db() -> Session:
     )
 
     # Ensure all models are imported before create_all
-    _ = (User, Class, ClassMembership, TeacherClassAssignment, Task, Submission, Grade, AuditLog)
+    _ = (
+        User,
+        AcademicYear,
+        Class,
+        ClassMembership,
+        TeacherClassAssignment,
+        Task,
+        Submission,
+        Grade,
+        AuditLog,
+    )
     Base.metadata.create_all(bind=engine)
 
     TestingSessionLocal = sessionmaker(

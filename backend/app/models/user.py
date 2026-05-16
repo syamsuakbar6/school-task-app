@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -23,6 +23,8 @@ class User(Base):
     nip = Column(String(18), nullable=True, unique=True, index=True)
     password = Column(String, nullable=False)
     role = Column(String, nullable=False)
+    is_alumni = Column(Boolean, nullable=False, default=False, index=True)
+    alumni_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utc_now_naive)
 
     tasks = relationship("Task", back_populates="creator")

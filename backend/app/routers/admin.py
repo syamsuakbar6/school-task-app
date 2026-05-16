@@ -1,5 +1,5 @@
 from io import BytesIO
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy import select, delete, func
@@ -11,7 +11,23 @@ from app.models.class_model import Class, ClassMembership, TeacherClassAssignmen
 from app.models.submission import Submission
 from app.models.task import Task
 from app.models.user import User, UserRole
+from app.schemas.promotion_schema import (
+    PromotionCommitRequest,
+    PromotionCommitResponse,
+    PromotionPreviewRequest,
+    PromotionPreviewResponse,
+)
 from app.schemas.user_schema import UserResponse
+from app.services.academic_year_service import AcademicYearService
+from app.services.promotion_service import PromotionService
+from app.utils.class_name_utils import (
+    build_class_code,
+    build_class_name,
+    normalize_class_name,
+    normalize_class_part,
+    normalize_grade_level,
+    parse_class_name,
+)
 from pydantic import BaseModel, Field
 
 
@@ -42,13 +58,20 @@ class CreateTeacherRequest(BaseModel):
 
 
 class CreateClassRequest(BaseModel):
-    name: str = Field(min_length=3, max_length=100)
-    code: str = Field(min_length=1, max_length=20)
+    name: str | None = Field(default=None, min_length=3, max_length=100)
+    code: str | None = Field(default=None, min_length=1, max_length=100)
+    grade_level: str | None = Field(default=None, min_length=1, max_length=3)
+    major: str | None = Field(default=None, min_length=1, max_length=50)
+    section: str | None = Field(default=None, min_length=1, max_length=20)
+    academic_year_id: int | None = None
 
 
 class UpdateClassRequest(BaseModel):
     name: str | None = Field(default=None, min_length=3, max_length=100)
-    code: str | None = Field(default=None, min_length=1, max_length=20)
+    code: str | None = Field(default=None, min_length=1, max_length=100)
+    grade_level: str | None = Field(default=None, min_length=1, max_length=3)
+    major: str | None = Field(default=None, min_length=1, max_length=50)
+    section: str | None = Field(default=None, min_length=1, max_length=20)
 
 
 class StudentResponse(BaseModel):
@@ -56,6 +79,7 @@ class StudentResponse(BaseModel):
     name: str
     nisn: str | None
     role: str
+    is_alumni: bool = False
 
     class Config:
         from_attributes = True
@@ -75,6 +99,11 @@ class ClassResponse(BaseModel):
     id: int
     name: str
     code: str | None
+    grade_level: str | None = None
+    major: str | None = None
+    section: str | None = None
+    academic_year_id: int | None = None
+    academic_year_name: str | None = None
     teacher_id: int | None = None
     is_archived: bool = False
     archived_at: datetime | None = None
@@ -87,6 +116,11 @@ class ClassWithStudentsResponse(BaseModel):
     id: int
     name: str
     code: str | None
+    grade_level: str | None = None
+    major: str | None = None
+    section: str | None = None
+    academic_year_id: int | None = None
+    academic_year_name: str | None = None
     students: list[StudentResponse] = Field(default_factory=list)
     teachers: list[TeacherResponse] = Field(default_factory=list)
     task_count: int = 0
@@ -105,6 +139,25 @@ class StudentImportResponse(BaseModel):
     skipped_count: int
     assigned: list[StudentResponse] = Field(default_factory=list)
     skipped: list[dict[str, str]] = Field(default_factory=list)
+
+
+class AcademicYearCreateRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=20)
+    starts_at: date | None = None
+    ends_at: date | None = None
+    is_active: bool = False
+
+
+class AcademicYearResponse(BaseModel):
+    id: int
+    name: str
+    starts_at: date | None = None
+    ends_at: date | None = None
+    is_active: bool = False
+    created_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
 
 
 # ── User endpoints ────────────────────────────────────────────────────────────
@@ -196,15 +249,91 @@ def delete_user(
     db.commit()
 
 
+# Academic year endpoints
+
+@router.get("/academic-years", response_model=list[AcademicYearResponse])
+def list_academic_years(
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> list[AcademicYearResponse]:
+    AcademicYearService.ensure_default_academic_year(db)
+    academic_years = AcademicYearService.list_academic_years(db)
+    return [AcademicYearResponse.model_validate(year) for year in academic_years]
+
+
+@router.post(
+    "/academic-years",
+    response_model=AcademicYearResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_academic_year(
+    payload: AcademicYearCreateRequest,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> AcademicYearResponse:
+    academic_year = AcademicYearService.create_academic_year(
+        db,
+        name=payload.name,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+        is_active=payload.is_active,
+    )
+    return AcademicYearResponse.model_validate(academic_year)
+
+
+@router.post(
+    "/academic-years/{academic_year_id}/activate",
+    response_model=AcademicYearResponse,
+)
+def activate_academic_year(
+    academic_year_id: int,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> AcademicYearResponse:
+    academic_year = AcademicYearService.set_active_academic_year(
+        db,
+        academic_year_id=academic_year_id,
+    )
+    return AcademicYearResponse.model_validate(academic_year)
+
+
 # ── Class endpoints ───────────────────────────────────────────────────────────
+
+# Promotion preview endpoints
+
+@router.post("/promotions/preview", response_model=PromotionPreviewResponse)
+def preview_promotion(
+    payload: PromotionPreviewRequest,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> PromotionPreviewResponse:
+    return PromotionService.preview(db, payload)
+
+
+@router.post("/promotions/commit", response_model=PromotionCommitResponse)
+def commit_promotion(
+    payload: PromotionCommitRequest,
+    db: DBSession,
+    _: User = Depends(require_admin),
+) -> PromotionCommitResponse:
+    return PromotionService.commit(db, payload)
+
 
 @router.get("/classes", response_model=list[ClassWithStudentsResponse])
 def list_all_classes(
     db: DBSession,
     _: User = Depends(require_admin),
     include_archived: bool = False,
+    academic_year_id: int | None = None,
 ) -> list[ClassWithStudentsResponse]:
+    if academic_year_id is None:
+        academic_year = AcademicYearService.ensure_default_academic_year(db)
+        academic_year_id = academic_year.id
+    else:
+        AcademicYearService.get_academic_year_or_404(db, academic_year_id)
+
     statement = select(Class).order_by(Class.is_archived.asc(), Class.created_at.desc())
+    statement = statement.where(Class.academic_year_id == academic_year_id)
     if not include_archived:
         statement = statement.where(Class.is_archived.is_(False))
     classes = db.scalars(statement).all()
@@ -238,6 +367,11 @@ def list_all_classes(
             id=c.id,
             name=c.name,
             code=c.code,
+            grade_level=c.grade_level,
+            major=c.major,
+            section=c.section,
+            academic_year_id=c.academic_year_id,
+            academic_year_name=c.academic_year_name,
             students=[StudentResponse.model_validate(s) for s in students],
             teachers=[TeacherResponse.model_validate(t) for t in teachers],
             task_count=task_count,
@@ -254,10 +388,33 @@ def create_class(
     db: DBSession,
     current_admin: User = Depends(require_admin),
 ) -> ClassResponse:
-    normalized_name = _normalize_class_name(payload.name)
-    normalized_code = payload.code.strip().upper()
-    _assert_active_class_name_available(db, normalized_name=normalized_name)
-    existing = db.scalar(select(Class).where(Class.code == normalized_code))
+    grade_level, major, section, normalized_name = _resolve_class_identity(
+        name=payload.name,
+        grade_level=payload.grade_level,
+        major=payload.major,
+        section=payload.section,
+    )
+    normalized_code = (
+        payload.code.strip().upper()
+        if payload.code is not None and payload.code.strip()
+        else build_class_code(normalized_name)
+    )
+    academic_year = (
+        AcademicYearService.get_academic_year_or_404(db, payload.academic_year_id)
+        if payload.academic_year_id is not None
+        else AcademicYearService.ensure_default_academic_year(db)
+    )
+    _assert_active_class_name_available(
+        db,
+        normalized_name=normalized_name,
+        academic_year_id=academic_year.id,
+    )
+    existing = db.scalar(
+        select(Class).where(
+            Class.code == normalized_code,
+            Class.academic_year_id == academic_year.id,
+        )
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -267,6 +424,10 @@ def create_class(
     new_class = Class(
         name=normalized_name,
         code=normalized_code,
+        grade_level=grade_level,
+        major=major,
+        section=section,
+        academic_year_id=academic_year.id,
         teacher_id=current_admin.id,
     )
     db.add(new_class)
@@ -289,21 +450,39 @@ def update_class(
             detail="Kelas arsip harus dipulihkan sebelum diubah.",
         )
 
-    if payload.name is not None:
-        normalized_name = _normalize_class_name(payload.name)
+    has_class_parts = any(
+        value is not None
+        for value in (payload.grade_level, payload.major, payload.section)
+    )
+    if payload.name is not None or has_class_parts:
+        grade_level, major, section, normalized_name = _resolve_class_identity(
+            name=payload.name,
+            grade_level=payload.grade_level,
+            major=payload.major,
+            section=payload.section,
+            existing_class=cls,
+        )
         if normalized_name.lower() != cls.name.lower():
             _assert_active_class_name_available(
                 db,
                 normalized_name=normalized_name,
+                academic_year_id=cls.academic_year_id,
                 exclude_class_id=class_id,
             )
         cls.name = normalized_name
+        cls.grade_level = grade_level
+        cls.major = major
+        cls.section = section
 
     if payload.code is not None:
         normalized_code = payload.code.strip().upper()
         if normalized_code != (cls.code or "").upper():
             existing = db.scalar(
-                select(Class).where(Class.code == normalized_code, Class.id != class_id)
+                select(Class).where(
+                    Class.code == normalized_code,
+                    Class.academic_year_id == cls.academic_year_id,
+                    Class.id != class_id,
+                )
             )
             if existing:
                 raise HTTPException(
@@ -344,6 +523,7 @@ def unarchive_class(
     _assert_active_class_name_available(
         db,
         normalized_name=cls.name,
+        academic_year_id=cls.academic_year_id,
         exclude_class_id=class_id,
     )
     cls.is_archived = False
@@ -364,18 +544,91 @@ def _get_class_or_404(db: Session, *, class_id: int) -> Class:
     return cls
 
 
-def _normalize_class_name(value: str) -> str:
-    return " ".join(value.strip().split())
+def _student_membership_in_academic_year(
+    db: Session,
+    *,
+    student_id: int,
+    academic_year_id: int | None,
+) -> ClassMembership | None:
+    return db.scalar(
+        select(ClassMembership)
+        .join(Class, Class.id == ClassMembership.class_id)
+        .where(ClassMembership.student_id == student_id)
+        .where(Class.academic_year_id == academic_year_id)
+    )
+
+
+def _resolve_class_identity(
+    *,
+    name: str | None,
+    grade_level: str | None,
+    major: str | None,
+    section: str | None,
+    existing_class: Class | None = None,
+) -> tuple[str | None, str | None, str | None, str]:
+    has_parts = any(value is not None for value in (grade_level, major, section))
+    if has_parts:
+        current_parts = _current_class_parts(existing_class)
+        resolved_grade = grade_level if grade_level is not None else current_parts[0]
+        resolved_major = major if major is not None else current_parts[1]
+        resolved_section = section if section is not None else current_parts[2]
+        if not resolved_grade or not resolved_major or not resolved_section:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tingkat, jurusan, dan nomor kelas wajib diisi.",
+            )
+        try:
+            normalized_name = build_class_name(
+                grade_level=resolved_grade,
+                major=resolved_major,
+                section=resolved_section,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        return (
+            normalize_grade_level(resolved_grade),
+            normalize_class_part(resolved_major),
+            normalize_class_part(resolved_section),
+            normalized_name,
+        )
+
+    if name is None or not name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nama kelas wajib diisi.",
+        )
+
+    normalized_name = normalize_class_name(name)
+    parsed = parse_class_name(normalized_name)
+    if parsed is None:
+        return None, None, None, normalized_name
+    return parsed[0], parsed[1], parsed[2], normalized_name
+
+
+def _current_class_parts(cls: Class | None) -> tuple[str | None, str | None, str | None]:
+    if cls is None:
+        return None, None, None
+    if cls.grade_level and cls.major and cls.section:
+        return cls.grade_level, cls.major, cls.section
+    parsed = parse_class_name(cls.name)
+    if parsed is None:
+        return cls.grade_level, cls.major, cls.section
+    return parsed
 
 
 def _assert_active_class_name_available(
     db: Session,
     *,
     normalized_name: str,
+    academic_year_id: int | None,
     exclude_class_id: int | None = None,
 ) -> None:
     statement = select(Class).where(
         func.lower(Class.name) == normalized_name.lower(),
+        Class.academic_year_id == academic_year_id,
         Class.is_archived.is_(False),
     )
     if exclude_class_id is not None:
@@ -459,16 +712,16 @@ def assign_student_to_class(
     if student is None or str(student.role).lower() != UserRole.STUDENT.value:
         raise HTTPException(status_code=404, detail="Siswa tidak ditemukan.")
 
-    existing = db.scalar(
-        select(ClassMembership).where(
-            ClassMembership.student_id == student_id,
-        )
+    existing = _student_membership_in_academic_year(
+        db,
+        student_id=student_id,
+        academic_year_id=cls.academic_year_id,
     )
     if existing:
         if existing.class_id == class_id:
             detail = "Siswa sudah terdaftar di kelas ini."
         else:
-            detail = "Siswa sudah terdaftar di kelas lain."
+            detail = "Siswa sudah terdaftar di kelas lain pada tahun ajaran ini."
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
@@ -622,14 +875,16 @@ async def import_students_to_class(
             db.flush()
             created_count += 1
 
-        existing = db.scalar(
-            select(ClassMembership).where(ClassMembership.student_id == student.id)
+        existing = _student_membership_in_academic_year(
+            db,
+            student_id=student.id,
+            academic_year_id=cls.academic_year_id,
         )
         if existing:
             reason = (
                 "Siswa sudah terdaftar di kelas ini."
                 if existing.class_id == class_id
-                else "Siswa sudah terdaftar di kelas lain."
+                else "Siswa sudah terdaftar di kelas lain pada tahun ajaran ini."
             )
             skipped.append({
                 "row": str(row_number),

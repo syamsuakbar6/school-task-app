@@ -20,10 +20,12 @@ class TaskDetailScreen extends StatefulWidget {
     super.key,
     required this.session,
     required this.taskId,
+    this.readOnly = false,
   });
 
   final AuthSession session;
   final int taskId;
+  final bool readOnly;
 
   @override
   State<TaskDetailScreen> createState() => _TaskDetailScreenState();
@@ -227,6 +229,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ),
               const SizedBox(height: 24),
               if (user?.isStudent == true) ...[
+                if (widget.readOnly) ...[
+                  const _HistoryReadOnlyNotice(),
+                  const SizedBox(height: 14),
+                ],
                 FutureBuilder<List<Submission>>(
                   future: _submissionsFuture,
                   builder: (context, snapshot) {
@@ -243,9 +249,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 GradientActionButton(
-                  label: task.isClosed ? 'Tugas ditutup' : 'Kumpulkan tugas',
+                  label: widget.readOnly
+                      ? 'Riwayat tugas'
+                      : task.isClosed
+                          ? 'Tugas ditutup'
+                          : 'Kumpulkan tugas',
                   icon: Icons.upload_file_outlined,
-                  onPressed: task.isClosed ? null : () => _openSubmit(task),
+                  onPressed: widget.readOnly || task.isClosed
+                      ? null
+                      : () => _openSubmit(task),
                 ),
                 const SizedBox(height: 24),
               ],
@@ -293,7 +305,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         .length;
                     final ungradedCount = submissions.length - gradedCount;
                     final visibleSubmissions = _filterSubmissions(submissions);
-                    final canGradeTask = task.createdBy == user?.id;
+                    final canGradeTask =
+                        !widget.readOnly && task.createdBy == user?.id;
                     final header = _SubmissionsHeader(
                       count: submissions.length,
                       gradedCount: gradedCount,
@@ -341,7 +354,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         header,
                         const SizedBox(height: 12),
                         if (!canGradeTask) ...[
-                          const _GradeOwnerNotice(),
+                          widget.readOnly
+                              ? const _HistoryReadOnlyNotice()
+                              : const _GradeOwnerNotice(),
                           const SizedBox(height: 12),
                         ],
                         if (visibleSubmissions.isEmpty)
@@ -376,8 +391,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                               submission)
                                           : null,
                                       canGrade: canGradeTask,
-                                      gradeDisabledMessage:
-                                          'Hanya pembuat tugas yang dapat memberi nilai.',
+                                      gradeDisabledMessage: widget.readOnly
+                                          ? 'Riwayat tugas hanya bisa dilihat.'
+                                          : 'Hanya pembuat tugas yang dapat memberi nilai.',
                                       onGrade: (grade, feedback) =>
                                           _grade(submission, grade, feedback),
                                     );
@@ -486,6 +502,37 @@ class _GradeOwnerNotice extends StatelessWidget {
             Expanded(
               child: Text(
                 'Hanya pembuat tugas yang dapat memberi nilai.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryReadOnlyNotice extends StatelessWidget {
+  const _HistoryReadOnlyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      color: colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.history_outlined, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Riwayat tugas hanya bisa dilihat. Pengumpulan dan penilaian baru tidak tersedia.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w700,

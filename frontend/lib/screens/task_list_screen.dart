@@ -44,6 +44,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   bool _studentClassesLoaded = false;
   bool _studentHasClass = true;
   _TeacherTaskScope _teacherTaskScope = _TeacherTaskScope.mine;
+  List<Map<String, dynamic>> _academicYears = [];
+  int? _selectedAcademicYearId;
+  bool _academicYearsLoaded = false;
 
   // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
@@ -64,6 +67,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Future<void> _initLoad() async {
+    await _loadAcademicYears();
     if (widget.session.user?.isStudent == true) {
       await _loadHiddenTaskIds();
       await _loadStudentClassState();
@@ -87,9 +91,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return 'hidden_task_ids_user_${widget.session.user?.id ?? 0}';
   }
 
+  Future<void> _loadAcademicYears() async {
+    try {
+      final years = await widget.session.api.fetchAccessibleAcademicYears();
+      if (!mounted) return;
+      setState(() {
+        _academicYears = years;
+        _academicYearsLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _academicYearsLoaded = true);
+    }
+  }
+
   Future<void> _loadStudentClassState() async {
     try {
-      final classes = await widget.session.api.fetchClasses();
+      final classes = await widget.session.api.fetchClasses(
+        includeHistory: _selectedAcademicYearId != null,
+        academicYearId: _selectedAcademicYearId,
+      );
       if (!mounted) return;
       setState(() {
         _studentClassesLoaded = true;
@@ -106,11 +127,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   Future<void> _loadClasses() async {
     try {
-      final classes = await widget.session.api.fetchClasses();
+      final classes = await widget.session.api.fetchClasses(
+        includeHistory: _selectedAcademicYearId != null,
+        academicYearId: _selectedAcademicYearId,
+      );
       if (!mounted) return;
       setState(() {
         _classes = classes;
         _classesLoaded = true;
+        if (classes.every((c) => c['id'] != _selectedClassId)) {
+          _selectedClassId = null;
+        }
         if (_selectedClassId == null && classes.isNotEmpty) {
           _selectedClassId = classes.first['id'] as int;
         }
@@ -126,7 +153,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
     setState(() {
       _tasksFuture = _fetchAndCacheTasks();
       _studentSubmissionsFuture = widget.session.user?.isStudent == true
-          ? widget.session.api.fetchSubmissions()
+          ? widget.session.api.fetchSubmissions(
+              academicYearId: _selectedAcademicYearId,
+            )
           : null;
     });
   }
@@ -135,6 +164,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<List<Task>> _fetchAndCacheTasks() async {
     var tasks = await widget.session.api.fetchTasks(
       classId: _selectedClassId,
+      academicYearId: _selectedAcademicYearId,
       mineOnly: widget.session.user?.isTeacher == true
           ? _teacherTaskScope == _TeacherTaskScope.mine
           : null,
@@ -153,7 +183,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     // Cache task untuk background notification service
     // Hanya untuk student (yang perlu submit)
-    if (widget.session.user?.isStudent == true) {
+    if (widget.session.user?.isStudent == true &&
+        _selectedAcademicYearId == null) {
       await _cacheTasksForNotification(tasks);
     }
 
@@ -165,7 +196,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
     // Ambil submission student untuk tahu mana yang sudah disubmit
     List<Submission> submissions = [];
     try {
-      submissions = await widget.session.api.fetchSubmissions();
+      submissions = await widget.session.api.fetchSubmissions(
+        academicYearId: _selectedAcademicYearId,
+      );
     } catch (_) {}
 
     final submittedTaskIds = submissions.map((s) => s.taskId).toSet();
@@ -198,7 +231,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _reloadTasks() async {
     final nextTasks = _fetchAndCacheTasks();
     final nextSubmissions = widget.session.user?.isStudent == true
-        ? widget.session.api.fetchSubmissions()
+        ? widget.session.api.fetchSubmissions(
+            academicYearId: _selectedAcademicYearId,
+          )
         : null;
     setState(() {
       _tasksFuture = nextTasks;
@@ -230,6 +265,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         TaskDetailScreen(
           session: widget.session,
           taskId: task.id,
+          readOnly: _selectedAcademicYearId != null,
         ),
       ),
     );
@@ -387,8 +423,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
       floatingActionButton: isTeacher
           ? FloatingActionButton.extended(
-              onPressed:
-                  _classesLoaded && _classes.isEmpty ? null : _openCreateTask,
+              onPressed: _selectedAcademicYearId != null ||
+                      (_classesLoaded && _classes.isEmpty)
+                  ? null
+                  : _openCreateTask,
               icon: const Icon(Icons.add),
               label: const Text('Tugas'),
             )
@@ -430,6 +468,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   teacherTaskScope: _TeacherTaskScope.classAll,
                   currentTeacherId: null,
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
+                  academicYears: _academicYears,
+                  selectedAcademicYearId: _selectedAcademicYearId,
+                  academicYearsLoaded: _academicYearsLoaded,
                   onRefresh: _reloadTasks,
                   onOpenTask: _openTaskDetail,
                   onHideTask: _hideTask,
@@ -444,6 +485,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     setState(() => _showHiddenOnly = value);
                   },
                   onTeacherScopeChanged: null,
+                  onAcademicYearChanged: _changeAcademicYear,
                   searchController: _searchController,
                 );
               },
@@ -467,6 +509,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
             teacherTaskScope: _teacherTaskScope,
             currentTeacherId: user?.id,
             submissionsByTaskId: const {},
+            academicYears: _academicYears,
+            selectedAcademicYearId: _selectedAcademicYearId,
+            academicYearsLoaded: _academicYearsLoaded,
             onRefresh: _reloadTasks,
             onOpenTask: _openTaskDetail,
             onHideTask: null,
@@ -480,6 +525,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               setState(() => _teacherTaskScope = scope);
               _load();
             },
+            onAcademicYearChanged: _changeAcademicYear,
             searchController: _searchController,
           );
         },
@@ -496,6 +542,21 @@ class _TaskListScreenState extends State<TaskListScreen> {
       }
     }
     return byTaskId;
+  }
+
+  void _changeAcademicYear(int? academicYearId) {
+    setState(() {
+      _selectedAcademicYearId = academicYearId;
+      _selectedClassId = null;
+      _classesLoaded = false;
+      _showHiddenOnly = false;
+    });
+    if (widget.session.user?.isTeacher == true) {
+      _loadClasses();
+    } else {
+      _loadStudentClassState();
+      _load();
+    }
   }
 }
 
@@ -563,6 +624,9 @@ class _TaskListBody extends StatelessWidget {
     required this.teacherTaskScope,
     required this.currentTeacherId,
     required this.submissionsByTaskId,
+    required this.academicYears,
+    required this.selectedAcademicYearId,
+    required this.academicYearsLoaded,
     required this.onRefresh,
     required this.onOpenTask,
     required this.onHideTask,
@@ -571,6 +635,7 @@ class _TaskListBody extends StatelessWidget {
     required this.onSearchChanged,
     required this.onHiddenToggle,
     required this.onTeacherScopeChanged,
+    required this.onAcademicYearChanged,
     required this.searchController,
   });
 
@@ -586,6 +651,9 @@ class _TaskListBody extends StatelessWidget {
   final _TeacherTaskScope teacherTaskScope;
   final int? currentTeacherId;
   final Map<int, Submission> submissionsByTaskId;
+  final List<Map<String, dynamic>> academicYears;
+  final int? selectedAcademicYearId;
+  final bool academicYearsLoaded;
   final Future<void> Function() onRefresh;
   final Future<void> Function(Task task) onOpenTask;
   final Future<void> Function(Task task)? onHideTask;
@@ -594,6 +662,7 @@ class _TaskListBody extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<bool>? onHiddenToggle;
   final ValueChanged<_TeacherTaskScope>? onTeacherScopeChanged;
+  final ValueChanged<int?> onAcademicYearChanged;
   final TextEditingController searchController;
 
   @override
@@ -671,6 +740,10 @@ class _TaskListBody extends StatelessWidget {
                     onHiddenToggle: onHiddenToggle,
                     teacherTaskScope: teacherTaskScope,
                     onTeacherScopeChanged: onTeacherScopeChanged,
+                    academicYears: academicYears,
+                    selectedAcademicYearId: selectedAcademicYearId,
+                    academicYearsLoaded: academicYearsLoaded,
+                    onAcademicYearChanged: onAcademicYearChanged,
                   ),
                   const SizedBox(height: 14),
                   _TaskSummaryCard(
@@ -772,6 +845,10 @@ class _TaskControls extends StatelessWidget {
     required this.onHiddenToggle,
     required this.teacherTaskScope,
     required this.onTeacherScopeChanged,
+    required this.academicYears,
+    required this.selectedAcademicYearId,
+    required this.academicYearsLoaded,
+    required this.onAcademicYearChanged,
   });
 
   final bool isStudent;
@@ -784,6 +861,10 @@ class _TaskControls extends StatelessWidget {
   final ValueChanged<bool>? onHiddenToggle;
   final _TeacherTaskScope teacherTaskScope;
   final ValueChanged<_TeacherTaskScope>? onTeacherScopeChanged;
+  final List<Map<String, dynamic>> academicYears;
+  final int? selectedAcademicYearId;
+  final bool academicYearsLoaded;
+  final ValueChanged<int?> onAcademicYearChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -811,6 +892,43 @@ class _TaskControls extends StatelessWidget {
                   ),
           ),
         ),
+        const SizedBox(height: 10),
+        _AcademicYearSelector(
+          years: academicYears,
+          selectedYearId: selectedAcademicYearId,
+          loaded: academicYearsLoaded,
+          onChanged: onAcademicYearChanged,
+        ),
+        if (selectedAcademicYearId != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.history_outlined,
+                  size: 18,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Mode riwayat: tugas lama hanya bisa dilihat.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (isStudent) ...[
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -919,6 +1037,53 @@ class _TeacherScopeChip extends StatelessWidget {
         selected: selected,
         onSelected: (_) => onSelected(),
       ),
+    );
+  }
+}
+
+class _AcademicYearSelector extends StatelessWidget {
+  const _AcademicYearSelector({
+    required this.years,
+    required this.selectedYearId,
+    required this.loaded,
+    required this.onChanged,
+  });
+
+  final List<Map<String, dynamic>> years;
+  final int? selectedYearId;
+  final bool loaded;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (!loaded) {
+      return const LinearProgressIndicator();
+    }
+
+    return DropdownButtonFormField<int?>(
+      value: selectedYearId,
+      decoration: const InputDecoration(
+        labelText: 'Tahun ajaran',
+        prefixIcon: Icon(Icons.calendar_month_outlined),
+      ),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('Tahun aktif'),
+        ),
+        ...years.where((year) => year['is_active'] != true).map((year) {
+          final id = year['id'] as int?;
+          final name = year['name'] as String? ?? '-';
+          return DropdownMenuItem<int?>(
+            value: id,
+            child: Text(name),
+          );
+        }),
+      ],
+      onChanged: onChanged,
+      dropdownColor: Theme.of(context).cardColor,
+      iconEnabledColor: colorScheme.onSurfaceVariant,
     );
   }
 }

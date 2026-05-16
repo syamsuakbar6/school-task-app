@@ -46,6 +46,7 @@ class UserSummary(BaseModel):
     role: UserRole
     nisn: str | None = None
     nip: str | None = None
+    is_alumni: bool = False
 
 
 class UserResponse(BaseModel):
@@ -57,4 +58,6 @@ class UserResponse(BaseModel):
     nisn: str | None = None
     nip: str | None = None
     role: UserRole
+    is_alumni: bool = False
+    alumni_at: datetime | None = None
     created_at: datetime

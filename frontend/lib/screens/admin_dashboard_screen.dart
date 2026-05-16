@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/auth_session.dart';
 import '../theme/theme_mode_scope.dart';
 import '../widgets/app_page_route.dart';
+import 'admin/admin_academic_years_screen.dart';
 import 'admin/admin_classes_screen.dart';
+import 'admin/admin_promotion_preview_screen.dart';
 import 'admin/admin_students_screen.dart';
 import 'admin/admin_teachers_screen.dart';
 import 'admin/admin_users_screen.dart';
@@ -78,6 +80,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         color: Colors.green,
         onTap: () => Navigator.of(context).push(
           appPageRoute(AdminClassesScreen(session: widget.session)),
+        ),
+      ),
+      _AdminMenu(
+        icon: Icons.calendar_month_outlined,
+        label: 'Tahun Ajaran',
+        description: 'Atur tahun ajaran aktif dan periode',
+        color: Colors.indigo,
+        onTap: () => Navigator.of(context).push(
+          appPageRoute(AdminAcademicYearsScreen(session: widget.session)),
+        ),
+      ),
+      _AdminMenu(
+        icon: Icons.trending_up,
+        label: 'Naik Kelas',
+        description: 'Preview kenaikan siswa per tahun ajaran',
+        color: Colors.purple,
+        onTap: () => Navigator.of(context).push(
+          appPageRoute(AdminPromotionPreviewScreen(session: widget.session)),
         ),
       ),
       _AdminMenu(

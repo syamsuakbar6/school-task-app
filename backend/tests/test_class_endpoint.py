@@ -37,8 +37,15 @@ def test_classes_teacher_with_assignment_sees_classes(db, teacher, open_task, cl
             "id": open_task.class_id,
             "name": "Class 1",
             "code": "C1",
+            "grade_level": None,
+            "major": None,
+            "section": None,
+            "academic_year_id": None,
+            "academic_year_name": None,
             "teacher_id": teacher.id,
             "created_at": payload[0]["created_at"],
+            "is_archived": False,
+            "archived_at": None,
         }
     ]
 
@@ -62,8 +69,15 @@ def test_classes_student_with_membership_sees_classes(db, student, open_task, me
             "id": open_task.class_id,
             "name": "Class 1",
             "code": "C1",
+            "grade_level": None,
+            "major": None,
+            "section": None,
+            "academic_year_id": None,
+            "academic_year_name": None,
             "teacher_id": open_task.created_by,
             "created_at": payload[0]["created_at"],
+            "is_archived": False,
+            "archived_at": None,
         }
     ]
 

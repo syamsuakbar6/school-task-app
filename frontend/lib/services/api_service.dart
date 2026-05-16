@@ -95,9 +95,27 @@ class ApiService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchClasses() async {
+  Future<List<Map<String, dynamic>>> fetchClasses({
+    bool includeHistory = false,
+    int? academicYearId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/classes').replace(
+      queryParameters: {
+        if (includeHistory) 'include_history': 'true',
+        if (academicYearId != null)
+          'academic_year_id': academicYearId.toString(),
+      },
+    );
     final response = await _client.get(
-      Uri.parse('$baseUrl/classes'),
+      uri,
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAccessibleAcademicYears() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/classes/academic-years'),
       headers: _headers,
     );
     return _decodeList(response);
@@ -105,10 +123,16 @@ class ApiService {
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
-  Future<List<Task>> fetchTasks({int? classId, bool? mineOnly}) async {
+  Future<List<Task>> fetchTasks({
+    int? classId,
+    int? academicYearId,
+    bool? mineOnly,
+  }) async {
     final uri = Uri.parse('$baseUrl/tasks').replace(
       queryParameters: {
         if (classId != null) 'class_id': classId.toString(),
+        if (academicYearId != null)
+          'academic_year_id': academicYearId.toString(),
         if (mineOnly != null) 'mine_only': mineOnly.toString(),
       },
     );
@@ -145,10 +169,15 @@ class ApiService {
 
   // ── Submissions ───────────────────────────────────────────────────────────
 
-  Future<List<Submission>> fetchSubmissions({int? taskId}) async {
+  Future<List<Submission>> fetchSubmissions({
+    int? taskId,
+    int? academicYearId,
+  }) async {
     final uri = Uri.parse('$baseUrl/submissions').replace(
       queryParameters: {
         if (taskId != null) 'task_id': taskId.toString(),
+        if (academicYearId != null)
+          'academic_year_id': academicYearId.toString(),
       },
     );
     final response = await _client.get(uri, headers: _headers);
@@ -262,6 +291,75 @@ class ApiService {
     return users.where((u) => u['role'] == 'teacher').toList();
   }
 
+  Future<List<Map<String, dynamic>>> adminListAcademicYears() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/admin/academic-years'),
+      headers: _headers,
+    );
+    return _decodeList(response);
+  }
+
+  Future<Map<String, dynamic>> adminCreateAcademicYear({
+    required String name,
+    String? startsAt,
+    String? endsAt,
+    bool isActive = false,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/academic-years'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name,
+        if (startsAt != null && startsAt.trim().isNotEmpty)
+          'starts_at': startsAt.trim(),
+        if (endsAt != null && endsAt.trim().isNotEmpty)
+          'ends_at': endsAt.trim(),
+        'is_active': isActive,
+      }),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminActivateAcademicYear(int yearId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/academic-years/$yearId/activate'),
+      headers: _headers,
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminPreviewPromotion({
+    required int sourceAcademicYearId,
+    required int targetAcademicYearId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/promotions/preview'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'source_academic_year_id': sourceAcademicYearId,
+        'target_academic_year_id': targetAcademicYearId,
+      }),
+    );
+    return _decodeObject(response);
+  }
+
+  Future<Map<String, dynamic>> adminCommitPromotion({
+    required int sourceAcademicYearId,
+    required int targetAcademicYearId,
+    required List<int> notPromotedStudentIds,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/admin/promotions/commit'),
+      headers: {..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'source_academic_year_id': sourceAcademicYearId,
+        'target_academic_year_id': targetAcademicYearId,
+        'not_promoted_student_ids': notPromotedStudentIds,
+      }),
+    );
+    return _decodeObject(response);
+  }
+
   Future<Map<String, dynamic>> adminCreateTeacher({
     required String nip,
     required String name,
@@ -298,10 +396,13 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> adminListClasses({
     bool includeArchived = false,
+    int? academicYearId,
   }) async {
     final uri = Uri.parse('$baseUrl/admin/classes').replace(
       queryParameters: {
         if (includeArchived) 'include_archived': 'true',
+        if (academicYearId != null)
+          'academic_year_id': academicYearId.toString(),
       },
     );
     final response = await _client.get(
@@ -314,11 +415,22 @@ class ApiService {
   Future<Map<String, dynamic>> adminCreateClass({
     required String name,
     required String code,
+    String? gradeLevel,
+    String? major,
+    String? section,
+    int? academicYearId,
   }) async {
     final response = await _client.post(
       Uri.parse('$baseUrl/admin/classes'),
       headers: {..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'code': code}),
+      body: jsonEncode({
+        'name': name,
+        'code': code,
+        if (gradeLevel != null) 'grade_level': gradeLevel,
+        if (major != null) 'major': major,
+        if (section != null) 'section': section,
+        if (academicYearId != null) 'academic_year_id': academicYearId,
+      }),
     );
     return _decodeObject(response);
   }
@@ -327,6 +439,9 @@ class ApiService {
     required int classId,
     String? name,
     String? code,
+    String? gradeLevel,
+    String? major,
+    String? section,
   }) async {
     final response = await _client.patch(
       Uri.parse('$baseUrl/admin/classes/$classId'),
@@ -334,6 +449,9 @@ class ApiService {
       body: jsonEncode({
         if (name != null) 'name': name,
         if (code != null) 'code': code,
+        if (gradeLevel != null) 'grade_level': gradeLevel,
+        if (major != null) 'major': major,
+        if (section != null) 'section': section,
       }),
     );
     return _decodeObject(response);

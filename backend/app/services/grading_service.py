@@ -33,11 +33,13 @@ class GradingService:
                 db,
                 teacher_id=current_user.id,
                 class_id=class_id,
+                include_history=True,
             )
         return submission.user_id == current_user.id and ClassAccessService.is_student_member(
             db,
             student_id=current_user.id,
             class_id=class_id,
+            include_history=True,
         )
 
     @staticmethod

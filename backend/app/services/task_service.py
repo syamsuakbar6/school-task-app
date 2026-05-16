@@ -17,6 +17,7 @@ class TaskService:
             db,
             current_user=current_user,
             class_id=class_id,
+            include_history=True,
         )
 
     @staticmethod
@@ -25,6 +26,7 @@ class TaskService:
             db,
             current_user=current_user,
             class_id=class_id,
+            include_history=True,
         )
 
     @staticmethod
@@ -56,6 +58,7 @@ class TaskService:
         *,
         current_user: User,
         class_id: int | None = None,
+        academic_year_id: int | None = None,
         mine_only: bool = False,
     ) -> list[Task]:
         statement = (
@@ -69,6 +72,8 @@ class TaskService:
             db,
             user_id=current_user.id,
             role=current_user.role,
+            include_history=academic_year_id is not None,
+            academic_year_id=academic_year_id,
         )
 
         if not class_ids:

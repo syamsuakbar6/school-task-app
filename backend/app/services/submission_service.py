@@ -27,6 +27,7 @@ class SubmissionService:
                 db,
                 teacher_id=current_user.id,
                 class_id=class_id,
+                include_history=True,
             )
 
         if submission.user_id != current_user.id:
@@ -35,6 +36,7 @@ class SubmissionService:
             db,
             student_id=current_user.id,
             class_id=class_id,
+            include_history=True,
         )
 
     @staticmethod
@@ -56,6 +58,7 @@ class SubmissionService:
         db: Session,
         current_user: User,
         class_id: int | None = None,
+        academic_year_id: int | None = None,
         task_id: int | None = None,
         student_id: int | None = None,
         submission_status: str | None = None,
@@ -83,6 +86,7 @@ class SubmissionService:
             if class_id is None:
                 task = db.scalar(select(Task).where(Task.id == task_id))
                 if task is not None:
+                    class_id = task.class_id
                     statement = statement.where(Submission.class_id == task.class_id)
 
         if role == UserRole.STUDENT.value:
@@ -94,12 +98,15 @@ class SubmissionService:
                     db,
                     student_id=current_user.id,
                     class_id=class_id,
+                    include_history=True,
                 )
             else:
                 class_ids = ClassAccessService.get_user_classes(
                     db,
                     user_id=current_user.id,
                     role=current_user.role,
+                    include_history=academic_year_id is not None,
+                    academic_year_id=academic_year_id,
                 )
                 if not class_ids:
                     return []
@@ -120,12 +127,15 @@ class SubmissionService:
                     db,
                     teacher_id=current_user.id,
                     class_id=class_id,
+                    include_history=True,
                 )
             else:
                 class_ids = ClassAccessService.get_user_classes(
                     db,
                     user_id=current_user.id,
                     role=current_user.role,
+                    include_history=academic_year_id is not None,
+                    academic_year_id=academic_year_id,
                 )
                 if not class_ids:
                     return []

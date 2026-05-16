@@ -37,8 +37,9 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
   void _refresh() => setState(_load);
 
   Future<void> _showAddClassDialog() async {
-    final nameController = TextEditingController();
-    final codeController = TextEditingController();
+    String gradeLevel = 'X';
+    final majorController = TextEditingController();
+    final sectionController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool saving = false;
     String? error;
@@ -51,56 +52,54 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
           title: const Text('Buat Kelas Baru'),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (error != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .errorContainer
-                          .withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 13,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (error != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  _ClassStructureFields(
+                    gradeLevel: gradeLevel,
+                    majorController: majorController,
+                    sectionController: sectionController,
+                    onGradeChanged: (value) {
+                      setDialogState(() => gradeLevel = value ?? 'X');
+                    },
+                    onTextChanged: () => setDialogState(() {}),
                   ),
                   const SizedBox(height: 12),
+                  _ClassPreview(
+                    name: _generatedClassName(
+                      gradeLevel: gradeLevel,
+                      major: majorController.text,
+                      section: sectionController.text,
+                    ),
+                    code: _generatedClassCode(
+                      gradeLevel: gradeLevel,
+                      major: majorController.text,
+                      section: sectionController.text,
+                    ),
+                  ),
                 ],
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Kelas',
-                    hintText: 'contoh: X RPL 1',
-                  ),
-                  validator: (v) {
-                    if ((v ?? '').trim().length < 3) {
-                      return 'Nama kelas minimal 3 karakter';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Kode Kelas',
-                    hintText: 'contoh: XRPL1',
-                  ),
-                  validator: (v) {
-                    if ((v ?? '').trim().isEmpty)
-                      return 'Kode kelas wajib diisi';
-                    return null;
-                  },
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
@@ -118,9 +117,21 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         error = null;
                       });
                       try {
+                        final name = _generatedClassName(
+                          gradeLevel: gradeLevel,
+                          major: majorController.text,
+                          section: sectionController.text,
+                        );
                         await widget.session.api.adminCreateClass(
-                          name: nameController.text.trim(),
-                          code: codeController.text.trim(),
+                          name: name,
+                          code: _generatedClassCode(
+                            gradeLevel: gradeLevel,
+                            major: majorController.text,
+                            section: sectionController.text,
+                          ),
+                          gradeLevel: gradeLevel,
+                          major: majorController.text.trim().toUpperCase(),
+                          section: sectionController.text.trim().toUpperCase(),
                         );
                         if (context.mounted) Navigator.pop(context);
                         _refresh();
@@ -149,13 +160,16 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
         ),
       ),
     );
+
+    majorController.dispose();
+    sectionController.dispose();
   }
 
   Future<void> _renameClass(Map<String, dynamic> cls) async {
-    final nameController =
-        TextEditingController(text: cls['name'] as String? ?? '');
-    final codeController =
-        TextEditingController(text: cls['code'] as String? ?? '');
+    final parts = _classPartsFromData(cls);
+    String gradeLevel = parts.gradeLevel;
+    final majorController = TextEditingController(text: parts.major);
+    final sectionController = TextEditingController(text: parts.section);
     final formKey = GlobalKey<FormState>();
     bool saving = false;
     String? error;
@@ -168,58 +182,55 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
           title: const Text('Ubah Kelas'),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (error != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .errorContainer
-                          .withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 13,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (error != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  _ClassStructureFields(
+                    gradeLevel: gradeLevel,
+                    majorController: majorController,
+                    sectionController: sectionController,
+                    onGradeChanged: (value) {
+                      setDialogState(() => gradeLevel = value ?? 'X');
+                    },
+                    onTextChanged: () => setDialogState(() {}),
                   ),
                   const SizedBox(height: 12),
+                  _ClassPreview(
+                    name: _generatedClassName(
+                      gradeLevel: gradeLevel,
+                      major: majorController.text,
+                      section: sectionController.text,
+                    ),
+                    code: _generatedClassCode(
+                      gradeLevel: gradeLevel,
+                      major: majorController.text,
+                      section: sectionController.text,
+                    ),
+                  ),
                 ],
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Kelas',
-                    hintText: 'contoh: XI RPL 1',
-                  ),
-                  validator: (value) {
-                    if ((value ?? '').trim().length < 3) {
-                      return 'Nama kelas minimal 3 karakter';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Kode Kelas',
-                    hintText: 'contoh: XIRPL1',
-                  ),
-                  validator: (value) {
-                    if ((value ?? '').trim().isEmpty) {
-                      return 'Kode kelas wajib diisi';
-                    }
-                    return null;
-                  },
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
@@ -237,10 +248,22 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                         error = null;
                       });
                       try {
+                        final name = _generatedClassName(
+                          gradeLevel: gradeLevel,
+                          major: majorController.text,
+                          section: sectionController.text,
+                        );
                         await widget.session.api.adminUpdateClass(
                           classId: cls['id'] as int,
-                          name: nameController.text.trim(),
-                          code: codeController.text.trim(),
+                          name: name,
+                          code: _generatedClassCode(
+                            gradeLevel: gradeLevel,
+                            major: majorController.text,
+                            section: sectionController.text,
+                          ),
+                          gradeLevel: gradeLevel,
+                          major: majorController.text.trim().toUpperCase(),
+                          section: sectionController.text.trim().toUpperCase(),
                         );
                         if (context.mounted) Navigator.pop(context);
                         _refresh();
@@ -270,8 +293,8 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
       ),
     );
 
-    nameController.dispose();
-    codeController.dispose();
+    majorController.dispose();
+    sectionController.dispose();
   }
 
   Future<void> _archiveClass(Map<String, dynamic> cls) async {
@@ -516,6 +539,16 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
                               ),
                             ),
                             const SizedBox(height: 4),
+                            Text(
+                              'Tahun ajaran: ${cls['academic_year_name'] ?? '-'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
                             Wrap(
                               spacing: 8,
                               runSpacing: 4,
@@ -658,6 +691,203 @@ class _AdminClassesScreenState extends State<AdminClassesScreen> {
     if (names.isEmpty) return '-';
     if (names.length <= 3) return names.join(', ');
     return '${names.take(3).join(', ')} +${names.length - 3} lainnya';
+  }
+
+  String _generatedClassName({
+    required String gradeLevel,
+    required String major,
+    required String section,
+  }) {
+    final normalizedMajor = _normalizePart(major);
+    final normalizedSection = _normalizePart(section);
+    return [gradeLevel, normalizedMajor, normalizedSection]
+        .where((part) => part.isNotEmpty)
+        .join(' ');
+  }
+
+  String _generatedClassCode({
+    required String gradeLevel,
+    required String major,
+    required String section,
+  }) {
+    final name = _generatedClassName(
+      gradeLevel: gradeLevel,
+      major: major,
+      section: section,
+    );
+    return name.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
+
+  String _normalizePart(String value) {
+    return value.trim().toUpperCase().split(RegExp(r'\s+')).join(' ');
+  }
+
+  _ClassParts _classPartsFromData(Map<String, dynamic> cls) {
+    final gradeLevel = (cls['grade_level'] as String?)?.trim().toUpperCase();
+    final major = (cls['major'] as String?)?.trim().toUpperCase();
+    final section = (cls['section'] as String?)?.trim().toUpperCase();
+    if (gradeLevel != null &&
+        (gradeLevel == 'X' || gradeLevel == 'XI' || gradeLevel == 'XII') &&
+        gradeLevel.isNotEmpty &&
+        major != null &&
+        major.isNotEmpty &&
+        section != null &&
+        section.isNotEmpty) {
+      return _ClassParts(
+        gradeLevel: gradeLevel,
+        major: major,
+        section: section,
+      );
+    }
+    return _parseClassName(cls['name'] as String? ?? '');
+  }
+
+  _ClassParts _parseClassName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 3) {
+      final gradeLevel = parts.first.toUpperCase();
+      if (gradeLevel == 'X' || gradeLevel == 'XI' || gradeLevel == 'XII') {
+        return _ClassParts(
+          gradeLevel: gradeLevel,
+          major: parts.sublist(1, parts.length - 1).join(' ').toUpperCase(),
+          section: parts.last.toUpperCase(),
+        );
+      }
+    }
+    return const _ClassParts(gradeLevel: 'X', major: '', section: '');
+  }
+}
+
+class _ClassParts {
+  const _ClassParts({
+    required this.gradeLevel,
+    required this.major,
+    required this.section,
+  });
+
+  final String gradeLevel;
+  final String major;
+  final String section;
+}
+
+class _ClassStructureFields extends StatelessWidget {
+  const _ClassStructureFields({
+    required this.gradeLevel,
+    required this.majorController,
+    required this.sectionController,
+    required this.onGradeChanged,
+    required this.onTextChanged,
+  });
+
+  final String gradeLevel;
+  final TextEditingController majorController;
+  final TextEditingController sectionController;
+  final ValueChanged<String?> onGradeChanged;
+  final VoidCallback onTextChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButtonFormField<String>(
+          value: gradeLevel,
+          decoration: const InputDecoration(labelText: 'Tingkat'),
+          items: const [
+            DropdownMenuItem(value: 'X', child: Text('X')),
+            DropdownMenuItem(value: 'XI', child: Text('XI')),
+            DropdownMenuItem(value: 'XII', child: Text('XII')),
+          ],
+          onChanged: onGradeChanged,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: majorController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Jurusan',
+            hintText: 'contoh: RPL',
+          ),
+          onChanged: (_) => onTextChanged(),
+          validator: (value) {
+            if ((value ?? '').trim().isEmpty) {
+              return 'Jurusan wajib diisi';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: sectionController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Nomor Kelas',
+            hintText: 'contoh: 1',
+          ),
+          onChanged: (_) => onTextChanged(),
+          validator: (value) {
+            if ((value ?? '').trim().isEmpty) {
+              return 'Nomor kelas wajib diisi';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ClassPreview extends StatelessWidget {
+  const _ClassPreview({
+    required this.name,
+    required this.code,
+  });
+
+  final String name;
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final displayName = name.trim().isEmpty ? '-' : name;
+    final displayCode = code.trim().isEmpty ? '-' : code;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Preview',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              displayName,
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Kode: $displayCode',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

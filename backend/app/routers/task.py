@@ -13,12 +13,14 @@ def list_tasks(
     db: DBSession,
     current_user=Depends(get_current_user),
     class_id: int | None = None,
+    academic_year_id: int | None = None,
     mine_only: bool = False,
 ) -> list[TaskResponse]:
     tasks = TaskService.get_all_tasks(
         db,
         current_user=current_user,
         class_id=class_id,
+        academic_year_id=academic_year_id,
         mine_only=mine_only,
     )
     return [TaskService.to_response(task) for task in tasks]
