@@ -35,7 +35,7 @@ def register_error_handlers(app: FastAPI) -> None:
     async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
         payload: dict[str, Any] = {
             "detail": exc.errors(),
-            "message": "Validation error.",
+            "message": "Data tidak valid. Periksa kembali isian form.",
             "status_code": status.HTTP_422_UNPROCESSABLE_ENTITY,
         }
         return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=payload)

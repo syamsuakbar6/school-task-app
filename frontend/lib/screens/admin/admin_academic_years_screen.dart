@@ -31,6 +31,57 @@ class _AdminAcademicYearsScreenState extends State<AdminAcademicYearsScreen> {
     });
   }
 
+  DateTime? _parseIsoDate(String value) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+    if (match == null) return null;
+    final year = int.tryParse(match.group(1)!);
+    final month = int.tryParse(match.group(2)!);
+    final day = int.tryParse(match.group(3)!);
+    if (year == null || month == null || day == null) return null;
+
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return null;
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+
+  String _formatIsoDate(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
+
+  String? _validateOptionalDate(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    if (_parseIsoDate(text) == null) {
+      return 'Tanggal harus valid dengan format YYYY-MM-DD';
+    }
+    return null;
+  }
+
+  Future<void> _pickDate(
+    TextEditingController controller,
+    StateSetter setDialogState,
+  ) async {
+    final current = _parseIsoDate(controller.text.trim()) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      helpText: 'Pilih tanggal',
+      cancelText: 'Batal',
+      confirmText: 'Pilih',
+    );
+    if (picked == null) return;
+    setDialogState(() {
+      controller.text = _formatIsoDate(picked);
+    });
+  }
+
   Future<void> _showCreateDialog() async {
     final nameController = TextEditingController();
     final startsController = TextEditingController();
@@ -89,18 +140,52 @@ class _AdminAcademicYearsScreenState extends State<AdminAcademicYearsScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: startsController,
-                    decoration: const InputDecoration(
+                    readOnly: true,
+                    onTap: saving
+                        ? null
+                        : () => _pickDate(startsController, setDialogState),
+                    decoration: InputDecoration(
                       labelText: 'Tanggal mulai',
                       hintText: 'YYYY-MM-DD',
+                      prefixIcon: const Icon(Icons.event_outlined),
+                      suffixIcon: startsController.text.trim().isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Kosongkan tanggal mulai',
+                              onPressed: saving
+                                  ? null
+                                  : () {
+                                      setDialogState(startsController.clear);
+                                    },
+                              icon: const Icon(Icons.close),
+                            ),
                     ),
+                    validator: _validateOptionalDate,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: endsController,
-                    decoration: const InputDecoration(
+                    readOnly: true,
+                    onTap: saving
+                        ? null
+                        : () => _pickDate(endsController, setDialogState),
+                    decoration: InputDecoration(
                       labelText: 'Tanggal selesai',
                       hintText: 'YYYY-MM-DD',
+                      prefixIcon: const Icon(Icons.event_available_outlined),
+                      suffixIcon: endsController.text.trim().isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Kosongkan tanggal selesai',
+                              onPressed: saving
+                                  ? null
+                                  : () {
+                                      setDialogState(endsController.clear);
+                                    },
+                              icon: const Icon(Icons.close),
+                            ),
                     ),
+                    validator: _validateOptionalDate,
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
@@ -127,6 +212,21 @@ class _AdminAcademicYearsScreenState extends State<AdminAcademicYearsScreen> {
                   ? null
                   : () async {
                       if (!formKey.currentState!.validate()) return;
+                      final startsAt = startsController.text.trim();
+                      final endsAt = endsController.text.trim();
+                      final startDate =
+                          startsAt.isEmpty ? null : _parseIsoDate(startsAt);
+                      final endDate =
+                          endsAt.isEmpty ? null : _parseIsoDate(endsAt);
+                      if (startDate != null &&
+                          endDate != null &&
+                          startDate.isAfter(endDate)) {
+                        setDialogState(() {
+                          error =
+                              'Tanggal mulai tidak boleh setelah tanggal selesai.';
+                        });
+                        return;
+                      }
                       setDialogState(() {
                         saving = true;
                         error = null;
@@ -134,8 +234,8 @@ class _AdminAcademicYearsScreenState extends State<AdminAcademicYearsScreen> {
                       try {
                         await widget.session.api.adminCreateAcademicYear(
                           name: nameController.text.trim(),
-                          startsAt: startsController.text,
-                          endsAt: endsController.text,
+                          startsAt: startsAt.isEmpty ? null : startsAt,
+                          endsAt: endsAt.isEmpty ? null : endsAt,
                           isActive: isActive,
                         );
                         if (context.mounted) Navigator.pop(context);

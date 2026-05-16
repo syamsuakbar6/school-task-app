@@ -28,7 +28,7 @@ from app.utils.class_name_utils import (
     normalize_grade_level,
     parse_class_name,
 )
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -146,6 +146,13 @@ class AcademicYearCreateRequest(BaseModel):
     starts_at: date | None = None
     ends_at: date | None = None
     is_active: bool = False
+
+    @field_validator("starts_at", "ends_at", mode="before")
+    @classmethod
+    def empty_date_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class AcademicYearResponse(BaseModel):
