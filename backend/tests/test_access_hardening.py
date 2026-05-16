@@ -63,7 +63,7 @@ def test_corrupted_submission_returns_409(db, teacher, student, open_task, membe
 
 
 def test_unknown_role_returns_403(db):
-    user = User(name="Mystery", email="mystery@example.com", password="x", role="admin")
+    user = User(name="Mystery", email="mystery@example.com", password="x", role="mystery")
     db.add(user)
     db.commit()
     db.refresh(user)

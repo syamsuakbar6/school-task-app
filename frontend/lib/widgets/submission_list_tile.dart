@@ -133,38 +133,56 @@ class SubmissionListTile extends StatelessWidget {
     final controller = TextEditingController(
       text: submission.grade?.toString() ?? '',
     );
+    String? errorText;
 
     final grade = await showDialog<int>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Beri nilai pengumpulan'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Nilai',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = int.tryParse(controller.text.trim());
-                if (value != null) {
-                  Navigator.pop(context, value);
-                }
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Beri nilai pengumpulan'),
+              content: TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Nilai',
+                  helperText: 'Masukkan angka 0 sampai 100',
+                  errorText: errorText,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (_) {
+                  if (errorText != null) {
+                    setDialogState(() => errorText = null);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final value = int.tryParse(controller.text.trim());
+                    if (value == null || value < 0 || value > 100) {
+                      setDialogState(() {
+                        errorText = 'Nilai harus berupa angka 0 sampai 100.';
+                      });
+                      return;
+                    }
+                    Navigator.pop(context, value);
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+
+    controller.dispose();
 
     if (grade != null) {
       onGrade(grade);

@@ -280,8 +280,11 @@ class SubmissionService:
         if not submission.file_path:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No file attached to this submission.",
+                detail="Pengumpulan ini tidak memiliki file.",
             )
+
+        if FileHandler.is_supabase_path(submission.file_path):
+            return submission, submission.file_path
 
         file_path = FileHandler.resolve_file_path(submission.file_path)
         return submission, str(file_path)

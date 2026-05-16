@@ -33,13 +33,14 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     # Local storage (fallback kalau Supabase tidak dikonfigurasi)
+    STORAGE_BACKEND: str = "supabase"
     STORAGE_DIR: str = "uploads/submissions"
     MAX_UPLOAD_SIZE_MB: int = 5
     ALLOWED_UPLOAD_EXTENSIONS: str = ".pdf,.docx,.png,.jpg,.jpeg,.txt,.zip"
 
     # Supabase Storage
-    SUPABASE_URL: str = "https://skfihhjiohhmuhgurwfx.supabase.co"
-    SUPABASE_SERVICE_ROLE_KEY: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrZmloaGppb2hobXVoZ3Vyd2Z4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzczMDM2MCwiZXhwIjoyMDkzMzA2MzYwfQ.Wj1XceoXITXdVHo_wUUwtn2BEsIL1xW67VFHJg5-EeA"
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_BUCKET: str = "submissions"
 
     @field_validator("SECRET_KEY")
@@ -72,7 +73,15 @@ class Settings(BaseSettings):
     @property
     def supabase_enabled(self) -> bool:
         """True kalau Supabase sudah dikonfigurasi."""
-        return bool(self.SUPABASE_URL and self.SUPABASE_SERVICE_ROLE_KEY)
+        return bool(
+            self.SUPABASE_URL.strip()
+            and self.SUPABASE_SERVICE_ROLE_KEY.strip()
+            and self.SUPABASE_BUCKET.strip()
+        )
+
+    @property
+    def use_supabase_storage(self) -> bool:
+        return self.STORAGE_BACKEND.strip().lower() == "supabase"
 
 
 @lru_cache

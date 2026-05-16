@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import settings
 from app.db.database import Base
 from app.models.audit_log import AuditLog
 from app.models.class_model import Class, ClassMembership, TeacherClassAssignment
@@ -15,6 +16,12 @@ from app.models.submission import Submission
 from app.models.task import Task
 from app.models.user import User
 from app.utils.datetime_utils import utc_now_naive
+
+
+@pytest.fixture(autouse=True)
+def local_file_storage(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "STORAGE_BACKEND", "local")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "submissions"))
 
 
 @pytest.fixture()

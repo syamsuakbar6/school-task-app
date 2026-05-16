@@ -29,9 +29,12 @@ class TaskDetailScreen extends StatefulWidget {
   State<TaskDetailScreen> createState() => _TaskDetailScreenState();
 }
 
+enum _SubmissionFilter { all, ungraded, graded }
+
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   late Future<Task> _taskFuture;
   late Future<List<Submission>> _submissionsFuture;
+  _SubmissionFilter _submissionFilter = _SubmissionFilter.all;
 
   @override
   void initState() {
@@ -244,7 +247,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const _SubmissionsHeader(count: 0),
+                          const _SubmissionsHeader(
+                            count: 0,
+                            gradedCount: 0,
+                            ungradedCount: 0,
+                            filter: _SubmissionFilter.all,
+                            onFilterChanged: null,
+                          ),
                           const SizedBox(height: 12),
                           Padding(
                             padding: const EdgeInsets.all(24),
@@ -272,14 +281,32 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       'hasError=${snapshot.hasError} '
                       'length=${submissions.length}',
                     );
+                    final gradedCount = submissions
+                        .where((submission) => submission.grade != null)
+                        .length;
+                    final ungradedCount = submissions.length - gradedCount;
+                    final visibleSubmissions =
+                        _filterSubmissions(submissions);
                     final header = _SubmissionsHeader(
                       count: submissions.length,
+                      gradedCount: gradedCount,
+                      ungradedCount: ungradedCount,
+                      filter: _submissionFilter,
+                      onFilterChanged: (filter) {
+                        setState(() => _submissionFilter = filter);
+                      },
                     );
                     if (submissions.isEmpty) {
                       return const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SubmissionsHeader(count: 0),
+                          _SubmissionsHeader(
+                            count: 0,
+                            gradedCount: 0,
+                            ungradedCount: 0,
+                            filter: _SubmissionFilter.all,
+                            onFilterChanged: null,
+                          ),
                           SizedBox(height: 12),
                           SizedBox(
                             height: 220,
@@ -299,14 +326,24 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       children: [
                         header,
                         const SizedBox(height: 12),
+                        if (visibleSubmissions.isEmpty)
+                          const SizedBox(
+                            height: 180,
+                            child: EmptyState(
+                              icon: Icons.filter_list_off_outlined,
+                              title: 'Tidak ada data pada filter ini',
+                              message: 'Ubah filter untuk melihat pengumpulan lain.',
+                            ),
+                          )
+                        else
                         Column(
                           children: [
                             for (var index = 0;
-                                index < submissions.length;
+                                index < visibleSubmissions.length;
                                 index++)
                               Builder(
                                 builder: (context) {
-                                  final submission = submissions[index];
+                                  final submission = visibleSubmissions[index];
                                   debugPrint(
                                     'SUBMISSION COLUMN ITEM: '
                                     'index=$index '
@@ -343,6 +380,21 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
         },
       ),
     );
+  }
+
+  List<Submission> _filterSubmissions(List<Submission> submissions) {
+    switch (_submissionFilter) {
+      case _SubmissionFilter.all:
+        return submissions;
+      case _SubmissionFilter.ungraded:
+        return submissions
+            .where((submission) => submission.grade == null)
+            .toList();
+      case _SubmissionFilter.graded:
+        return submissions
+            .where((submission) => submission.grade != null)
+            .toList();
+    }
   }
 }
 
@@ -618,39 +670,164 @@ class _DeadlineChip extends StatelessWidget {
 }
 
 class _SubmissionsHeader extends StatelessWidget {
-  const _SubmissionsHeader({required this.count});
+  const _SubmissionsHeader({
+    required this.count,
+    required this.gradedCount,
+    required this.ungradedCount,
+    required this.filter,
+    required this.onFilterChanged,
+  });
 
   final int count;
+  final int gradedCount;
+  final int ungradedCount;
+  final _SubmissionFilter filter;
+  final ValueChanged<_SubmissionFilter>? onFilterChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Pengumpulan',
-          style: theme.textTheme.titleLarge,
-        ),
-        const SizedBox(width: 10),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Text(
-              count.toString(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w800,
+        Row(
+          children: [
+            Text(
+              'Pengumpulan',
+              style: theme.textTheme.titleLarge,
+            ),
+            const SizedBox(width: 10),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                child: Text(
+                  count.toString(),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _SubmissionCountChip(
+              icon: Icons.pending_actions_outlined,
+              label: '$ungradedCount belum dinilai',
+              color: Colors.amber.shade800,
+            ),
+            _SubmissionCountChip(
+              icon: Icons.check_circle_outline,
+              label: '$gradedCount sudah dinilai',
+              color: Colors.green.shade700,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _SubmissionFilterChip(
+                label: 'Semua',
+                selected: filter == _SubmissionFilter.all,
+                onSelected: onFilterChanged == null
+                    ? null
+                    : () => onFilterChanged!(_SubmissionFilter.all),
+              ),
+              _SubmissionFilterChip(
+                label: 'Belum dinilai',
+                selected: filter == _SubmissionFilter.ungraded,
+                onSelected: onFilterChanged == null
+                    ? null
+                    : () => onFilterChanged!(_SubmissionFilter.ungraded),
+              ),
+              _SubmissionFilterChip(
+                label: 'Sudah dinilai',
+                selected: filter == _SubmissionFilter.graded,
+                onSelected: onFilterChanged == null
+                    ? null
+                    : () => onFilterChanged!(_SubmissionFilter.graded),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SubmissionCountChip extends StatelessWidget {
+  const _SubmissionCountChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubmissionFilterChip extends StatelessWidget {
+  const _SubmissionFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: onSelected == null ? null : (_) => onSelected!(),
+      ),
     );
   }
 }

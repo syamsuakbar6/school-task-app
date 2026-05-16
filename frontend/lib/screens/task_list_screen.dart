@@ -39,6 +39,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
   _TaskFilter _taskFilter = _TaskFilter.active;
   String _searchQuery = '';
   bool _showHiddenOnly = false;
+  bool _studentClassesLoaded = false;
+  bool _studentHasClass = true;
 
   // Multi-class (teacher only)
   List<Map<String, dynamic>> _classes = [];
@@ -61,6 +63,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _initLoad() async {
     if (widget.session.user?.isStudent == true) {
       await _loadHiddenTaskIds();
+      await _loadStudentClassState();
     }
     if (widget.session.user?.isTeacher == true) {
       await _loadClasses();
@@ -82,6 +85,23 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   String _hiddenTasksKey() {
     return 'hidden_task_ids_user_${widget.session.user?.id ?? 0}';
+  }
+
+  Future<void> _loadStudentClassState() async {
+    try {
+      final classes = await widget.session.api.fetchClasses();
+      if (!mounted) return;
+      setState(() {
+        _studentClassesLoaded = true;
+        _studentHasClass = classes.isNotEmpty;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _studentClassesLoaded = true;
+        _studentHasClass = true;
+      });
+    }
   }
 
   Future<void> _loadClasses() async {
@@ -164,6 +184,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _refresh() {
     if (widget.session.user?.isTeacher == true) {
       _loadClasses();
+    } else if (widget.session.user?.isStudent == true) {
+      _loadStudentClassState();
+      _load();
     } else {
       _load();
     }
@@ -394,8 +417,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   showHiddenOnly: _showHiddenOnly,
                   hiddenTaskIds: _hiddenTaskIds,
                   hiddenCount: _hiddenTaskIds.length,
-                  emptyTitle: null,
-                  emptyMessage: null,
+                  emptyTitle: _studentClassesLoaded && !_studentHasClass
+                      ? 'Belum terdaftar di kelas'
+                      : null,
+                  emptyMessage: _studentClassesLoaded && !_studentHasClass
+                      ? 'Minta admin menambahkan akun kamu ke kelas agar tugas bisa muncul.'
+                      : null,
                   showSubmissionStatus: true,
                   submissionsByTaskId: _latestSubmissionByTaskId(submissions),
                   onRefresh: _reloadTasks,

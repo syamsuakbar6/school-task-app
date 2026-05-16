@@ -10,6 +10,8 @@ from fastapi.responses import StreamingResponse
 
 from app.core.config import settings
 
+_SUPABASE_PATH_PREFIX = "supabase://"
+
 
 @dataclass(slots=True)
 class StoredFile:
@@ -91,21 +93,26 @@ class FileHandler:
         FileHandler._validate_contents(contents)
 
         file_name = f"{uuid4().hex}{suffix}"
-        storage_path = f"submissions/task_{int(task_id)}/user_{int(user_id)}/{file_name}"
+        storage_path = f"task_{int(task_id)}/user_{int(user_id)}/{file_name}"
 
-        if settings.supabase_enabled:
+        if settings.use_supabase_storage:
+            if not settings.supabase_enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Supabase Storage belum dikonfigurasi lengkap.",
+                )
             return await FileHandler._upload_to_supabase(
                 contents=contents,
                 storage_path=storage_path,
                 original_name=file.filename or file_name,
                 suffix=suffix,
             )
-        else:
-            return FileHandler._save_to_local(
-                contents=contents,
-                storage_path=storage_path,
-                original_name=file.filename or file_name,
-            )
+
+        return FileHandler._save_to_local(
+            contents=contents,
+            storage_path=storage_path,
+            original_name=file.filename or file_name,
+        )
 
     @staticmethod
     async def _upload_to_supabase(
@@ -124,14 +131,14 @@ class FileHandler:
             supabase.storage.from_(settings.SUPABASE_BUCKET).upload(
                 path=storage_path,
                 file=contents,
-                file_options={"content-type": content_type, "upsert": "false"},
+                file_options={"content-type": content_type},
             )
 
             # Buat signed URL yang berlaku 1 tahun (untuk download)
             # Kita simpan path-nya saja di DB, generate signed URL saat download
             return StoredFile(
                 original_name=original_name,
-                relative_path=storage_path,  # simpan path, bukan URL
+                relative_path=FileHandler._mark_supabase_path(storage_path),
                 absolute_path=None,
             )
         except Exception as exc:
@@ -204,8 +211,9 @@ class FileHandler:
         """
         try:
             supabase = _get_supabase()
+            object_path = FileHandler._supabase_object_path(file_path)
             result = supabase.storage.from_(settings.SUPABASE_BUCKET).create_signed_url(
-                path=file_path,
+                path=object_path,
                 expires_in=expires_in,
             )
             signed_url = result.get("signedURL") or result.get("signed_url")
@@ -226,8 +234,19 @@ class FileHandler:
         """
         if not file_path:
             return False
-        # Supabase path kita selalu diawali 'submissions/'
-        return file_path.startswith("submissions/") and not file_path.startswith("/")
+        return file_path.startswith(_SUPABASE_PATH_PREFIX) or (
+            file_path.startswith("submissions/") and not file_path.startswith("/")
+        )
+
+    @staticmethod
+    def _mark_supabase_path(object_path: str) -> str:
+        return f"{_SUPABASE_PATH_PREFIX}{object_path.lstrip('/')}"
+
+    @staticmethod
+    def _supabase_object_path(file_path: str) -> str:
+        if file_path.startswith(_SUPABASE_PATH_PREFIX):
+            return file_path.removeprefix(_SUPABASE_PATH_PREFIX).lstrip("/")
+        return file_path.lstrip("/")
 
     # ── Delete ────────────────────────────────────────────────────────────────
 
@@ -237,7 +256,7 @@ class FileHandler:
         if not file_path:
             return False
 
-        if settings.supabase_enabled and FileHandler.is_supabase_path(file_path):
+        if FileHandler.is_supabase_path(file_path):
             return FileHandler._delete_from_supabase(file_path)
 
         try:
@@ -251,7 +270,8 @@ class FileHandler:
     def _delete_from_supabase(file_path: str) -> bool:
         try:
             supabase = _get_supabase()
-            supabase.storage.from_(settings.SUPABASE_BUCKET).remove([file_path])
+            object_path = FileHandler._supabase_object_path(file_path)
+            supabase.storage.from_(settings.SUPABASE_BUCKET).remove([object_path])
             return True
         except Exception:
             return False

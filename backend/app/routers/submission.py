@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.dependencies import DBSession, get_current_user, require_student, require_teacher
-from app.core.config import settings
 from app.schemas.submission_schema import SubmissionGradeRequest, SubmissionResponse
 from app.services.submission_service import SubmissionService
 from app.utils.file_handler import FileHandler
@@ -71,8 +70,8 @@ def download_submission(
         current_user=current_user,
     )
 
-    # Supabase path → generate signed URL lalu redirect
-    if settings.supabase_enabled and FileHandler.is_supabase_path(file_path):
+    # Supabase path -> generate signed URL lalu redirect
+    if FileHandler.is_supabase_path(file_path):
         signed_url = FileHandler.get_supabase_signed_url(
             file_path,
             expires_in=3600,  # URL valid 1 jam

@@ -64,3 +64,12 @@ def health_check() -> dict[str, str]:
 @app.get("/health/db", tags=["Health"])
 def database_health_check(db: Session = Depends(get_db)) -> dict[str, int | str]:
     return check_database_connection(db)
+
+
+@app.get("/health/storage", tags=["Health"])
+def storage_health_check() -> dict[str, str | bool]:
+    return {
+        "backend": settings.STORAGE_BACKEND,
+        "supabase_enabled": settings.supabase_enabled,
+        "bucket": settings.SUPABASE_BUCKET,
+    }
